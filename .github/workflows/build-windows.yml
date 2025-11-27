@@ -46,7 +46,9 @@ jobs:
         run: |
           cd native/keyboard-hook
           npm install
-          npm run rebuild
+          $electronVersion = node -p "require('electron/package.json').version"
+          Write-Host "Building for Electron version: $electronVersion"
+          npx node-gyp rebuild --target=$electronVersion --arch=x64 --dist-url=https://electronjs.org/headers
         shell: pwsh
 
       - name: Build Windows installer
