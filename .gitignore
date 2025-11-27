@@ -20,3 +20,6 @@ native/keyboard-hook/build/keyboard-hook.vcxproj*
 # Cache
 .cache/
 
+# Temporary files
+electron-version.txt
+

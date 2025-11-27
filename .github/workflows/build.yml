@@ -63,11 +63,21 @@ jobs:
         working-directory: native/keyboard-hook
         run: npm install
 
+      - name: Get Electron version
+        id: electron-version
+        run: |
+          $version = node get-electron-version.js
+          $version = $version.Trim()
+          echo "ELECTRON_VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Electron version: $version"
+        shell: pwsh
+
       - name: Build native keyboard hook module
         working-directory: native/keyboard-hook
         run: npm run rebuild
         env:
-          npm_config_target: 28.3.3
+          ELECTRON_VERSION: ${{ steps.electron-version.outputs.ELECTRON_VERSION }}
+          npm_config_target: ${{ steps.electron-version.outputs.ELECTRON_VERSION }}
           npm_config_arch: x64
           npm_config_disturl: https://electronjs.org/headers
           npm_config_runtime: electron

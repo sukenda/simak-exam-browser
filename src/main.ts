@@ -88,6 +88,13 @@ app.whenReady().then(async () => {
     }
 
     splashWindow = createSplashWindow();
+    
+    // Register admin and info shortcuts BEFORE keyboard locks
+    // This ensures they are registered first and won't be blocked
+    setupIpcHandlers();
+    registerAdminShortcut();
+    registerInfoShortcut();
+    
     examWindow = await createExamWindow({splash: splashWindow});
     if (examWindow) {
         startRendererMemoryMonitor(examWindow);
@@ -95,10 +102,6 @@ app.whenReady().then(async () => {
 
     // F12 sekarang diblokir, info overlay menggunakan CTRL+SHIFT+ALT+S
     // Handler F12 dihapus karena F12 sekarang diblokir
-
-    setupIpcHandlers();
-    registerAdminShortcut();
-    registerInfoShortcut();
     if (!isDev) {
         const feedUrl = process.env.AUTO_UPDATE_URL;
         if (feedUrl) {
@@ -231,23 +234,30 @@ function setupIpcHandlers() {
 
 function registerAdminShortcut() {
     const accelerator = appConfig.adminShortcut;
+    logger.info(`Registering admin shortcut: ${accelerator}`);
     const success = globalShortcut.register(accelerator, () => {
+        logger.info(`Admin shortcut triggered: ${accelerator}`);
         openAdminWindow();
     });
     if (!success) {
         logger.error(`Gagal mendaftarkan shortcut admin ${accelerator}`);
+    } else {
+        logger.info(`✅ Admin shortcut registered successfully: ${accelerator}`);
     }
 }
 
 function registerInfoShortcut() {
     // Shortcut info overlay: CTRL+SHIFT+ALT+S
-    const success = globalShortcut.register('CommandOrControl+Shift+Alt+S', () => {
+    const accelerator = 'CommandOrControl+Shift+Alt+S';
+    logger.info(`Registering info shortcut: ${accelerator}`);
+    const success = globalShortcut.register(accelerator, () => {
+        logger.info(`Info shortcut triggered: ${accelerator}`);
         toggleInfoOverlay();
     });
     if (!success) {
-        logger.warn('Gagal mendaftarkan shortcut CTRL+SHIFT+ALT+S untuk info');
+        logger.warn(`Gagal mendaftarkan shortcut ${accelerator} untuk info`);
     } else {
-        logger.info('Shortcut info overlay terdaftar: CTRL+SHIFT+ALT+S');
+        logger.info(`✅ Info shortcut registered successfully: ${accelerator}`);
     }
 }
 

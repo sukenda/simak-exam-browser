@@ -69,10 +69,39 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             return 1; // Block all function keys F1-F12
         }
         
+        // ============================================
+        // ALLOW ADMIN AND INFO SHORTCUTS
+        // ============================================
+        // Allow Ctrl+Alt+Shift+A (admin shortcut)
+        // VK_A = 0x41
+        if (pKeyboard->vkCode == 0x41 && 
+            (GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
+            (GetAsyncKeyState(VK_MENU) & 0x8000) &&
+            (GetAsyncKeyState(VK_SHIFT) & 0x8000)) {
+            return CallNextHookEx(g_hook, nCode, wParam, lParam); // Allow
+        }
+        
+        // Allow Ctrl+Shift+Alt+S (info shortcut)
+        // VK_S = 0x53
+        if (pKeyboard->vkCode == 0x53 && 
+            (GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
+            (GetAsyncKeyState(VK_MENU) & 0x8000) &&
+            (GetAsyncKeyState(VK_SHIFT) & 0x8000)) {
+            return CallNextHookEx(g_hook, nCode, wParam, lParam); // Allow
+        }
+        
         // Block Ctrl + A sampai Z (0x41-0x5A)
-        if (pKeyboard->vkCode >= 0x41 && pKeyboard->vkCode <= 0x5A && 
-            (GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
-            return 1;
+        // BUT: Skip if Alt+Shift is also pressed (for admin/info shortcuts)
+        BOOL hasCtrl = GetAsyncKeyState(VK_CONTROL) & 0x8000;
+        BOOL hasAlt = GetAsyncKeyState(VK_MENU) & 0x8000;
+        BOOL hasShift = GetAsyncKeyState(VK_SHIFT) & 0x8000;
+        
+        if (pKeyboard->vkCode >= 0x41 && pKeyboard->vkCode <= 0x5A && hasCtrl) {
+            // Don't block if Alt+Shift is also pressed (admin/info shortcuts)
+            if (hasAlt && hasShift) {
+                return CallNextHookEx(g_hook, nCode, wParam, lParam); // Allow
+            }
+            return 1; // Block
         }
         
         // Block Ctrl + 1, 2, 5 (0x31, 0x32, 0x35)

@@ -1,7 +1,7 @@
 import { BrowserWindow, globalShortcut } from 'electron';
 import type { Input } from 'electron';
 import { logger } from '../logger';
-import { isDev } from '../config';
+import { isDev, appConfig } from '../config';
 import {
   loadNativeKeyboardHook,
   installNativeKeyboardHook,
@@ -188,6 +188,32 @@ export function registerShortcutLocks(window: BrowserWindow) {
   window.webContents.on('before-input-event', (event, input) => {
     const combo = formatCombo(input);
     const key = input.key || input.code || '';
+    
+    // ============================================
+    // ALLOW ADMIN AND INFO SHORTCUTS (HIGHEST PRIORITY)
+    // ============================================
+    // Allow admin shortcut (default: Ctrl+Alt+Shift+A)
+    // Check if all three modifiers (Ctrl, Alt, Shift) are pressed
+    const hasAllModifiers = input.control && input.alt && input.shift;
+    if (hasAllModifiers) {
+      const adminShortcut = appConfig.adminShortcut || 'Ctrl+Alt+Shift+A';
+      const adminKey = adminShortcut.split('+').pop()?.toUpperCase(); // Extract 'A' from 'Ctrl+Alt+Shift+A'
+      
+      // Normalize key for comparison
+      const normalizedKey = normalizeKey(key);
+      const normalizedAdminKey = normalizeKey(adminKey || 'A');
+      
+      if (normalizedKey === normalizedAdminKey) {
+        logger.info(`[ALLOW] Admin shortcut detected: ${combo}`);
+        return; // Allow the shortcut to pass through
+      }
+      
+      // Allow info shortcut (Ctrl+Shift+Alt+S)
+      if (normalizedKey === 'S') {
+        logger.info(`[ALLOW] Info shortcut detected: ${combo}`);
+        return; // Allow the shortcut to pass through
+      }
+    }
     
     // ============================================
     // PRIORITY: BLOCK WINDOWS KEY (HIGHEST PRIORITY)
