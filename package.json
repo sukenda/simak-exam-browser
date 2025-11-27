@@ -8,10 +8,10 @@
     "name": "SIMAK KHAS Kempek",
     "email": "simakkhas@gmail.com"
   },
-  "homepage": "https://simak-khas-kempek.gitlab.io/simak-exam-browser/",
+  "homepage": "https://github.com/sukenda/simak-exam-browser",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/simak-khas-kempek/simak-exam-browser.git"
+    "url": "https://github.com/sukenda/simak-exam-browser.git"
   },
   "scripts": {
     "clean": "npx rimraf dist || rm -rf dist",
@@ -136,8 +136,9 @@
       "maintainer": "SIMAK KHAS Kempek <simakkhas@gmail.com>"
     },
     "publish": {
-      "provider": "generic",
-      "url": "https://simak-khas-kempek.gitlab.io/simak-exam-browser/"
+      "provider": "github",
+      "owner": "sukenda",
+      "repo": "simak-exam-browser"
     }
   },
   "engines": {

@@ -5,6 +5,18 @@ dist
 .DS_Store
 .env
 out
-# Native module - only track prebuilt .node file
+
+# Native keyboard hook module
+# Only track the prebuilt .node file (built by GitHub Actions on Windows)
 native/keyboard-hook/node_modules
+native/keyboard-hook/build/Release/.deps
+native/keyboard-hook/build/Release/obj
+native/keyboard-hook/build/binding.sln
+native/keyboard-hook/build/config.gypi
+native/keyboard-hook/build/keyboard-hook.vcxproj*
+# Keep the prebuilt .node file
+!native/keyboard-hook/build/Release/keyboard-hook.node
+
+# Cache
+.cache/
 
