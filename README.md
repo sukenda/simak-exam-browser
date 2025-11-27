@@ -13,16 +13,16 @@ SIMAK Exam Browser adalah aplikasi desktop yang dirancang khusus untuk mengamank
 - ✅ **Blokir Context Menu** - Klik kanan tidak berfungsi
 - ✅ **Blokir Copy/Paste** - Clipboard diblokir untuk mencegah salin-tempel
 - ✅ **Monitoring Fokus Window** - Mendeteksi dan melaporkan kehilangan fokus
-- ✅ **Auto Update** - Update otomatis dari GitHub Releases
+- ✅ **Auto Update** - Update otomatis dari GitHub Releases dengan dialog notifikasi
 - ✅ **Dialog Peringatan** - Notifikasi visual saat user mencoba aksi terlarang
 - ✅ **Admin Panel** - Panel admin tersembunyi untuk keluar aplikasi
-- ✅ **Info Aplikasi** - Tekan F12 untuk melihat informasi aplikasi
+- ✅ **Info Aplikasi** - Tekan Ctrl+Shift+Alt+S untuk melihat informasi aplikasi
 
 ## 🚀 Instalasi
 
 ### Persyaratan Sistem
 
-- **OS**: Windows 10/11 (64-bit)
+- **OS**: Windows 10/11 (64-bit atau 32-bit)
 - **RAM**: Minimal 4GB
 - **Disk**: Minimal 200MB ruang kosong
 - **Koneksi Internet**: Diperlukan untuk koneksi ke server ujian dan auto-update
@@ -31,9 +31,13 @@ SIMAK Exam Browser adalah aplikasi desktop yang dirancang khusus untuk mengamank
 
 #### 1. Download Installer
 
-Download file installer dari [GitLab Releases](https://gitlab.com/simak-khas-kempek/simak-exam-browser/-/releases) atau dari sumber yang disediakan administrator.
+Download file installer dari [GitHub Releases](https://github.com/sukenda/simak-exam-browser/releases) atau dari [GitHub Pages](https://sukenda.github.io/simak-exam-browser/).
 
-File installer memiliki format: `simak-exam-browser-Setup-{version}.exe`
+**Tersedia dua versi:**
+- **Windows 64-bit** (Recommended): `simak-exam-browser-Setup-{version}-x64.exe`
+- **Windows 32-bit**: `simak-exam-browser-Setup-{version}-ia32.exe`
+
+Pilih installer sesuai arsitektur Windows Anda (64-bit atau 32-bit).
 
 #### 2. Jalankan Installer
 
@@ -73,7 +77,7 @@ Jika Anda ingin mengembangkan atau memodifikasi aplikasi:
 
 1. **Clone Repository**
    ```bash
-   git clone https://gitlab.com/simak-khas-kempek/simak-exam-browser.git
+   git clone https://github.com/sukenda/simak-exam-browser.git
    cd simak-exam-browser
    ```
 
@@ -93,7 +97,7 @@ Jika Anda ingin mengembangkan atau memodifikasi aplikasi:
    ATTENTION_WEBHOOK_URL=https://simak.example.sch.id/api/exam/attention
    ADMIN_PIN=123456
    ADMIN_SHORTCUT=Ctrl+Alt+Shift+A
-   AUTO_UPDATE_URL=https://gitlab+deploy-token-xxx:token@gitlab.com/group/project/-/releases/
+   AUTO_UPDATE_URL=https://sukenda.github.io/simak-exam-browser/
    ```
 
 4. **Jalankan Development Mode**
@@ -114,8 +118,20 @@ Jika Anda ingin mengembangkan atau memodifikasi aplikasi:
    **Catatan**: Native module adalah opsional. Aplikasi akan tetap berfungsi dengan Electron API jika native module tidak tersedia.
 
 6. **Build untuk Production**
+   
+   **Build Windows 64-bit:**
    ```bash
    npm run build
+   ```
+   
+   **Build Windows 32-bit:**
+   ```bash
+   npm run build:ia32
+   ```
+   
+   **Build kedua arsitektur:**
+   ```bash
+   npm run build:all
    ```
    
    File installer akan tersedia di folder `out/`
@@ -124,14 +140,17 @@ Jika Anda ingin mengembangkan atau memodifikasi aplikasi:
 
 ## 🔄 Auto Update
 
-Aplikasi mendukung auto-update otomatis dari GitLab Releases. Fitur ini memungkinkan aplikasi untuk memperbarui dirinya sendiri tanpa perlu instalasi manual.
+Aplikasi mendukung auto-update otomatis dari GitHub Releases melalui GitHub Pages. Fitur ini memungkinkan aplikasi untuk memperbarui dirinya sendiri tanpa perlu instalasi manual.
 
 ### Cara Kerja Auto Update
 
-1. **Saat Aplikasi Dibuka**: Aplikasi secara otomatis mengecek update dari GitLab Releases
-2. **Deteksi Update**: Jika ada versi baru, aplikasi akan mengunduh installer di background
-3. **Instalasi Otomatis**: Setelah download selesai, aplikasi akan restart dan menginstal versi baru
-4. **Transparan untuk User**: Proses update berjalan otomatis tanpa intervensi user
+1. **Saat Aplikasi Dibuka**: Aplikasi secara otomatis mengecek update dari GitHub Pages
+2. **Deteksi Update**: Jika ada versi baru, aplikasi akan menampilkan dialog "Update Tersedia"
+3. **Download Otomatis**: Update akan diunduh di background sambil menampilkan progress
+4. **Dialog Install**: Setelah download selesai, muncul dialog "Update Siap Diinstall" dengan pilihan:
+   - **Install Sekarang**: Restart aplikasi dan install update segera
+   - **Nanti**: Install update saat aplikasi ditutup
+5. **Auto-Install on Quit**: Jika user memilih "Nanti", update akan terinstall otomatis saat aplikasi ditutup
 
 ### Konfigurasi Auto Update
 
@@ -140,44 +159,53 @@ Aplikasi mendukung auto-update otomatis dari GitLab Releases. Fitur ini memungki
 Auto update dikonfigurasi melalui environment variable `AUTO_UPDATE_URL`:
 
 ```env
-AUTO_UPDATE_URL=https://gitlab+deploy-token-USERNAME:TOKEN@gitlab.com/group/project/-/releases/
+AUTO_UPDATE_URL=https://sukenda.github.io/simak-exam-browser/
 ```
 
 **Format URL:**
-- `gitlab+deploy-token-USERNAME`: Username dari GitLab Deploy Token
-- `TOKEN`: Token dari GitLab Deploy Token
-- `group/project`: Group dan nama project di GitLab
-- `/-/releases/`: Path ke releases (harus diakhiri dengan `/`)
+- URL harus mengarah ke GitHub Pages repository
+- Harus diakhiri dengan `/` (slash)
+- Aplikasi akan otomatis menambahkan `latest.yml` (untuk 64-bit) atau `latest-ia32.yml` (untuk 32-bit)
 
-#### Membuat GitLab Deploy Token
+**File Manifest:**
+- **Windows 64-bit**: Menggunakan `latest.yml` yang berisi informasi installer x64
+- **Windows 32-bit**: Menggunakan `latest-ia32.yml` yang berisi informasi installer ia32
+- File-file ini di-generate otomatis oleh GitHub Actions saat build
+- File-file ini di-deploy ke GitHub Pages untuk akses publik
 
-1. Buka project di GitLab
-2. Pergi ke **Settings** → **Repository** → **Deploy tokens**
-3. Klik **Add token**
-4. Isi:
-   - **Name**: `exam-browser-updater`
-   - **Scopes**: Centang `read_repository`
-5. Klik **Create token**
-6. Salin **Username** dan **Token** yang diberikan
-7. Gunakan untuk membuat `AUTO_UPDATE_URL`
+**Catatan Penting:**
+- Repository harus **Public** untuk GitHub Pages gratis
+- GitHub Pages harus diaktifkan di repository settings
+- GitHub Pages harus dikonfigurasi untuk menggunakan **GitHub Actions** sebagai source
+
+#### Setup GitHub Pages
+
+1. Buka repository di GitHub
+2. Pergi ke **Settings** → **Pages**
+3. Di bagian **Source**, pilih **GitHub Actions**
+4. Pastikan repository adalah **Public** (untuk GitHub Pages gratis)
 
 #### Testing Auto Update
 
-1. **Buat Release Baru di GitLab**:
+1. **Buat Release Baru di GitHub**:
    ```bash
    git tag v0.2.0
    git push origin v0.2.0
    ```
    
-   GitLab CI/CD akan otomatis build dan membuat release
+   GitHub Actions akan otomatis:
+   - Build aplikasi untuk Windows 64-bit dan 32-bit
+   - Membuat GitHub Release dengan installer
+   - Deploy ke GitHub Pages dengan file `latest.yml` dan `latest-ia32.yml`
 
 2. **Jalankan Aplikasi Versi Lama**:
-   - Aplikasi akan otomatis mendeteksi update
+   - Aplikasi akan otomatis mendeteksi update saat dibuka
+   - Dialog "Update Tersedia" akan muncul
    - Update akan diunduh di background
-   - Aplikasi akan restart dan menginstal versi baru
+   - Setelah selesai, dialog "Update Siap Diinstall" akan muncul
 
 3. **Verifikasi Update**:
-   - Tekan **F12** untuk membuka info aplikasi
+   - Tekan **Ctrl+Shift+Alt+S** untuk membuka info aplikasi
    - Periksa versi aplikasi
 
 ### Troubleshooting Auto Update
@@ -186,8 +214,9 @@ AUTO_UPDATE_URL=https://gitlab+deploy-token-USERNAME:TOKEN@gitlab.com/group/proj
 
 1. **Periksa Koneksi Internet**: Pastikan komputer terhubung ke internet
 2. **Periksa URL Feed**: Pastikan `AUTO_UPDATE_URL` benar dan dapat diakses
-3. **Periksa Token**: Pastikan Deploy Token masih valid dan memiliki akses `read_repository`
-4. **Periksa Log**: Log aplikasi tersedia di `%APPDATA%\SIMAK Exam Browser\logs\`
+3. **Periksa GitHub Pages**: Pastikan GitHub Pages sudah diaktifkan dan dapat diakses
+4. **Periksa File Manifest**: Pastikan file `latest.yml` (64-bit) atau `latest-ia32.yml` (32-bit) tersedia di GitHub Pages
+5. **Periksa Log**: Log aplikasi tersedia di `%APPDATA%\SIMAK Exam Browser\logs\`
 
 #### Update Gagal
 
@@ -199,9 +228,10 @@ AUTO_UPDATE_URL=https://gitlab+deploy-token-USERNAME:TOKEN@gitlab.com/group/proj
 
 Jika auto-update tidak berfungsi, Anda dapat melakukan update manual:
 
-1. Download installer versi terbaru dari GitLab Releases
-2. Jalankan installer (akan otomatis mengupgrade instalasi yang ada)
-3. Atau uninstall versi lama terlebih dahulu, lalu install versi baru
+1. Download installer versi terbaru dari [GitHub Releases](https://github.com/sukenda/simak-exam-browser/releases) atau [GitHub Pages](https://sukenda.github.io/simak-exam-browser/)
+2. Pilih installer sesuai arsitektur Windows Anda (x64 untuk 64-bit, ia32 untuk 32-bit)
+3. Jalankan installer (akan otomatis mengupgrade instalasi yang ada)
+4. Atau uninstall versi lama terlebih dahulu, lalu install versi baru
 
 ## 📝 Konfigurasi
 
@@ -234,7 +264,7 @@ Aplikasi menggunakan environment variables untuk konfigurasi. File `.env` diguna
 
 ### Shortcut Keyboard
 
-- **F12**: Menampilkan informasi aplikasi
+- **Ctrl+Shift+Alt+S**: Menampilkan informasi aplikasi
 - **Ctrl+Alt+Shift+A**: Membuka panel admin (default, dapat diubah)
 
 ### Panel Admin
@@ -311,11 +341,11 @@ Aplikasi menggunakan **Sentry** untuk crash reporting dan error tracking. Fitur 
      SENTRY_DSN=https://xxxxx@xxxxx.ingest.sentry.io/xxxxx
      ```
 
-3. **Setup di Production (GitLab CI)**:
-   - Buka GitLab Project → Settings → CI/CD → Variables
-   - Tambahkan variable `SENTRY_DSN` dengan value DSN dari Sentry
-   - Set sebagai **Protected** dan **Masked** untuk keamanan
-   - Variable akan otomatis ditambahkan ke `.env` saat build
+3. **Setup di Production (GitHub Actions)**:
+   - Buka GitHub Repository → Settings → Secrets and variables → Actions
+   - Klik **New repository secret**
+   - Tambahkan secret `SENTRY_DSN` dengan value DSN dari Sentry
+   - Secret akan otomatis ditambahkan ke `.env` saat build
 
 ### Fitur Crash Reporting
 
@@ -371,7 +401,8 @@ Beberapa shortcut (seperti Alt+Tab, Windows Key) memerlukan konfigurasi OS-level
 ## 📚 Dokumentasi Tambahan
 
 - [Deployment Guide](docs/DEPLOYMENT.md) - Panduan deployment untuk lab ujian
-- [GitLab CI/CD](.gitlab-ci.yml) - Konfigurasi CI/CD untuk build otomatis
+- [GitHub Actions Workflow](.github/workflows/build.yml) - Konfigurasi CI/CD untuk build otomatis
+- [GitHub Pages Setup](docs/GITHUB_PAGES_SETUP.md) - Panduan setup GitHub Pages untuk auto-update
 
 ## 📄 License
 

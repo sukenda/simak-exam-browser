@@ -15,6 +15,8 @@ export function createAdminWindow(options: AdminWindowOptions) {
     autoHideMenuBar: true,
     minimizable: false,
     maximizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
     title: 'Admin',
     webPreferences: {
       preload: join(app.getAppPath(), 'dist/adminPreload.js'),

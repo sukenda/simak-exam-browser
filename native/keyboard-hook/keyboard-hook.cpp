@@ -174,8 +174,9 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         // VK_RETURN = 0x0D, VK_TAB = 0x09, VK_DELETE = 0x2E, VK_BACK = 0x08
         // VK_INSERT = 0x2D, VK_HOME = 0x24, VK_END = 0x23
         // VK_PRIOR = 0x21 (PageUp), VK_NEXT = 0x22 (PageDown)
+        // Note: VK_BACK (Backspace) is ALLOWED - needed for text editing in forms
         if (pKeyboard->vkCode == VK_RETURN || pKeyboard->vkCode == VK_TAB ||
-            pKeyboard->vkCode == VK_DELETE || pKeyboard->vkCode == VK_BACK ||
+            pKeyboard->vkCode == VK_DELETE ||
             pKeyboard->vkCode == VK_INSERT || pKeyboard->vkCode == VK_HOME ||
             pKeyboard->vkCode == VK_END || pKeyboard->vkCode == 0x21 || // PageUp
             pKeyboard->vkCode == 0x22 || // PageDown

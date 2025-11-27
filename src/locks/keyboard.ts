@@ -190,6 +190,14 @@ export function registerShortcutLocks(window: BrowserWindow) {
     const key = input.key || input.code || '';
     
     // ============================================
+    // ALLOW BACKSPACE (NEEDED FOR TEXT EDITING)
+    // ============================================
+    // Backspace must be allowed for text editing in forms
+    if (key === 'Backspace' || input.code === 'Backspace') {
+      return; // Allow Backspace to pass through
+    }
+    
+    // ============================================
     // ALLOW ADMIN AND INFO SHORTCUTS (HIGHEST PRIORITY)
     // ============================================
     // Allow admin shortcut (default: Ctrl+Alt+Shift+A)
@@ -256,7 +264,8 @@ export function registerShortcutLocks(window: BrowserWindow) {
       return;
     }
     
-    // Block special keys (Enter, Tab, Delete, Backspace, Insert, Home, End, PageUp, PageDown, Arrow keys, NumLock)
+    // Block special keys (Enter, Tab, Delete, Insert, Home, End, PageUp, PageDown, Arrow keys, NumLock)
+    // Note: Backspace is ALLOWED - needed for text editing in forms
     const specialKeys = ['Enter', 'Tab', 'Delete', 'Insert', 'Home', 'End', 
                          'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
                          'Escape', 'Esc', 'NumLock'];
