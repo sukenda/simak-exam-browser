@@ -123,8 +123,8 @@ jobs:
       - name: Build TypeScript
         run: npm run build:ts
 
-      - name: Build Windows Installer
-        run: npx electron-builder --win --publish never
+      - name: Build Windows 64-bit Installer
+        run: npx electron-builder --win --x64 --publish never
 
       - name: List output files
         shell: bash
@@ -134,20 +134,20 @@ jobs:
           echo "=== latest.yml ==="
           cat out/latest.yml || echo "latest.yml not found"
 
-      - name: Upload Windows artifacts
+      - name: Upload Windows 64-bit artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: |
-            out/*.exe
+            out/*x64*.exe
             out/latest.yml
           retention-days: 30
 
   # ============================================================
-  # Build Linux Ubuntu (.deb)
+  # Build Windows 32-bit (.exe) with Native Keyboard Hook Module
   # ============================================================
-  build-linux:
-    runs-on: ubuntu-latest
+  build-windows-ia32:
+    runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -160,6 +160,7 @@ jobs:
 
       - name: Get version
         id: version
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
@@ -173,12 +174,57 @@ jobs:
         run: npm ci --include=dev
 
       - name: Update version in package.json
+        shell: bash
         run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version --allow-same-version
+
+      # ============================================================
+      # Build Native Keyboard Hook Module (Windows 32-bit)
+      # ============================================================
+      - name: Setup Python for node-gyp
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install native module dependencies
+        working-directory: native/keyboard-hook
+        run: npm install
+
+      - name: Get Electron version
+        id: electron-version
+        run: |
+          $version = node get-electron-version.js
+          $version = $version.Trim()
+          echo "ELECTRON_VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Electron version: $version"
+        shell: pwsh
+
+      - name: Build native keyboard hook module (32-bit)
+        working-directory: native/keyboard-hook
+        run: npm run rebuild
+        env:
+          ELECTRON_VERSION: ${{ steps.electron-version.outputs.ELECTRON_VERSION }}
+          npm_config_target: ${{ steps.electron-version.outputs.ELECTRON_VERSION }}
+          npm_config_arch: ia32
+          npm_config_disturl: https://electronjs.org/headers
+          npm_config_runtime: electron
+
+      - name: Verify native module build
+        shell: bash
+        run: |
+          echo "=== Checking native module (32-bit) ==="
+          if [ -f "native/keyboard-hook/build/Release/keyboard-hook.node" ]; then
+            echo "✅ Native keyboard hook module built successfully (32-bit)"
+            ls -la native/keyboard-hook/build/Release/
+          else
+            echo "❌ Native module not found!"
+            exit 1
+          fi
 
       # ============================================================
       # Create .env file
       # ============================================================
       - name: Create .env file
+        shell: bash
         run: |
           PAGES_URL="https://${{ github.repository_owner }}.github.io/simak-exam-browser"
           cat > .env << EOF
@@ -190,44 +236,45 @@ jobs:
           SENTRY_DSN=${{ secrets.SENTRY_DSN || '' }}
           EOF
           echo "============================================================"
-          echo "Building for Linux Ubuntu (.deb)"
+          echo "Building for Windows 32-bit (ia32)"
           echo "AUTO_UPDATE_URL: ${PAGES_URL}/"
-          echo "Note: Native keyboard hook is Windows only, Linux uses Electron API fallback"
           echo "============================================================"
 
       # ============================================================
       # Build TypeScript and Electron App
       # ============================================================
       - name: Clean dist folder
+        shell: bash
         run: rm -rf dist
 
       - name: Build TypeScript
         run: npm run build:ts
 
-      - name: Build Linux .deb Package
-        run: npx electron-builder --linux --publish never
+      - name: Build Windows 32-bit Installer
+        run: npx electron-builder --win --ia32 --publish never
 
       - name: List output files
+        shell: bash
         run: |
           echo "=== Output files ==="
           ls -la out/ || echo "out folder not found"
-          echo "=== latest-linux.yml ==="
-          cat out/latest-linux.yml || echo "latest-linux.yml not found"
+          echo "=== latest.yml ==="
+          cat out/latest.yml || echo "latest.yml not found"
 
-      - name: Upload Linux artifacts
+      - name: Upload Windows 32-bit artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-build
+          name: windows-ia32-build
           path: |
-            out/*.deb
-            out/latest-linux.yml
+            out/*ia32*.exe
+            out/latest.yml
           retention-days: 30
 
   # ============================================================
   # Create GitHub Release
   # ============================================================
   release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-windows-ia32]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -239,24 +286,24 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Download Windows artifacts
+      - name: Download Windows 64-bit artifacts
         uses: actions/download-artifact@v4
         with:
           name: windows-build
-          path: artifacts/windows
+          path: artifacts/windows-x64
 
-      - name: Download Linux artifacts
+      - name: Download Windows 32-bit artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-build
-          path: artifacts/linux
+          name: windows-ia32-build
+          path: artifacts/windows-ia32
 
       - name: List all artifacts
         run: |
-          echo "=== Windows artifacts ==="
-          ls -la artifacts/windows/
-          echo "=== Linux artifacts ==="
-          ls -la artifacts/linux/
+          echo "=== Windows 64-bit artifacts ==="
+          ls -la artifacts/windows-x64/
+          echo "=== Windows 32-bit artifacts ==="
+          ls -la artifacts/windows-ia32/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -265,22 +312,28 @@ jobs:
           body: |
             ## Download
 
-            ### Windows
-            - **Installer (.exe)**: simak-exam-browser-Setup-${{ steps.version.outputs.VERSION }}.exe
-            - Native keyboard hook: ✅ Built-in (blocks Windows key, Alt+Tab, etc. at OS level)
+            ### Windows 64-bit (Recommended)
+            - **Installer (.exe)**: simak-exam-browser-Setup-${{ steps.version.outputs.VERSION }}-x64.exe
+            - Untuk Windows 10/11 64-bit (komputer modern)
+            - Native keyboard hook: ✅ Built-in
 
-            ### Linux Ubuntu
-            - **Debian Package (.deb)**: simak-exam-browser-${{ steps.version.outputs.VERSION }}-linux-amd64.deb
-            - Install: `sudo dpkg -i simak-exam-browser-${{ steps.version.outputs.VERSION }}-linux-amd64.deb`
-            - Fix dependencies: `sudo apt-get install -f`
+            ### Windows 32-bit
+            - **Installer (.exe)**: simak-exam-browser-Setup-${{ steps.version.outputs.VERSION }}-ia32.exe
+            - Untuk Windows 10/11 32-bit atau komputer lama
+            - Native keyboard hook: ✅ Built-in
+
+            ## Fitur Keamanan
+            - ✅ Blokir Windows key, Alt+Tab, Ctrl+Shift+Esc
+            - ✅ Mode kiosk fullscreen
+            - ✅ Monitoring fokus window
+            - ✅ Auto-update otomatis
 
             ## Auto Update
             Aplikasi akan otomatis mengecek update saat dibuka.
           files: |
-            artifacts/windows/*.exe
-            artifacts/windows/latest.yml
-            artifacts/linux/*.deb
-            artifacts/linux/latest-linux.yml
+            artifacts/windows-x64/*.exe
+            artifacts/windows-x64/latest.yml
+            artifacts/windows-ia32/*.exe
           draft: false
           prerelease: false
 
@@ -288,7 +341,7 @@ jobs:
   # Deploy to GitHub Pages for Auto-Update
   # ============================================================
   deploy-pages:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-windows-ia32]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -301,36 +354,36 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Get version
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Download Windows artifacts
+      - name: Download Windows 64-bit artifacts
         uses: actions/download-artifact@v4
         with:
           name: windows-build
-          path: artifacts/windows
+          path: artifacts/windows-x64
 
-      - name: Download Linux artifacts
+      - name: Download Windows 32-bit artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-build
-          path: artifacts/linux
+          name: windows-ia32-build
+          path: artifacts/windows-ia32
 
       - name: Prepare GitHub Pages content
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           mkdir -p public
           
-          # Copy Windows files
-          cp artifacts/windows/*.exe public/ || echo "No Windows exe found"
-          cp artifacts/windows/latest.yml public/ || echo "No latest.yml found"
+          # Copy Windows 64-bit files
+          cp artifacts/windows-x64/*.exe public/ || echo "No Windows 64-bit exe found"
+          cp artifacts/windows-x64/latest.yml public/ || echo "No latest.yml found"
           
-          # Copy Linux files
-          cp artifacts/linux/*.deb public/ || echo "No Linux deb found"
-          cp artifacts/linux/latest-linux.yml public/ || echo "No latest-linux.yml found"
+          # Copy Windows 32-bit files
+          cp artifacts/windows-ia32/*.exe public/ || echo "No Windows 32-bit exe found"
           
           # Create index.html
           cat > public/index.html << 'HTMLEOF'
@@ -498,50 +551,43 @@ jobs:
               <div class="platforms">
                 <div class="platform-card">
                   <div class="platform-icon">🪟</div>
-                  <div class="platform-title">Windows</div>
-                  <p class="platform-desc">Windows 10/11 (64-bit)</p>
-                  <a href="simak-exam-browser-Setup-VERSION_PLACEHOLDER.exe" class="download-btn">
-                    ⬇️ Download Installer
+                  <div class="platform-title">Windows 64-bit</div>
+                  <p class="platform-desc">Windows 10/11 (64-bit) - Recommended</p>
+                  <a href="simak-exam-browser-Setup-VERSION_PLACEHOLDER-x64.exe" class="download-btn">
+                    ⬇️ Download Installer (64-bit)
                   </a>
                   <div class="feature-badge">✅ Native Keyboard Hook</div>
                 </div>
                 
                 <div class="platform-card">
-                  <div class="platform-icon">🐧</div>
-                  <div class="platform-title">Linux Ubuntu</div>
-                  <p class="platform-desc">Ubuntu/Debian (64-bit)</p>
-                  <a href="simak-exam-browser-VERSION_PLACEHOLDER-linux-amd64.deb" class="download-btn">
-                    ⬇️ Download .deb Package
+                  <div class="platform-icon">🪟</div>
+                  <div class="platform-title">Windows 32-bit</div>
+                  <p class="platform-desc">Windows 10/11 (32-bit) atau komputer lama</p>
+                  <a href="simak-exam-browser-Setup-VERSION_PLACEHOLDER-ia32.exe" class="download-btn">
+                    ⬇️ Download Installer (32-bit)
                   </a>
-                  <div class="install-cmd">
-                    sudo dpkg -i simak-exam-browser-VERSION_PLACEHOLDER-linux-amd64.deb
-                  </div>
+                  <div class="feature-badge">✅ Native Keyboard Hook</div>
                 </div>
               </div>
               
               <h3 class="section-title">📁 All Files</h3>
               <ul class="file-list">
                 <li>
-                  <a href="simak-exam-browser-Setup-VERSION_PLACEHOLDER.exe">simak-exam-browser-Setup-VERSION_PLACEHOLDER.exe</a>
-                  <span class="file-desc"> — Windows Installer</span>
+                  <a href="simak-exam-browser-Setup-VERSION_PLACEHOLDER-x64.exe">simak-exam-browser-Setup-VERSION_PLACEHOLDER-x64.exe</a>
+                  <span class="file-desc"> — Windows 64-bit Installer (Recommended)</span>
                 </li>
                 <li>
-                  <a href="simak-exam-browser-VERSION_PLACEHOLDER-linux-amd64.deb">simak-exam-browser-VERSION_PLACEHOLDER-linux-amd64.deb</a>
-                  <span class="file-desc"> — Linux Debian Package</span>
+                  <a href="simak-exam-browser-Setup-VERSION_PLACEHOLDER-ia32.exe">simak-exam-browser-Setup-VERSION_PLACEHOLDER-ia32.exe</a>
+                  <span class="file-desc"> — Windows 32-bit Installer</span>
                 </li>
                 <li>
                   <a href="latest.yml">latest.yml</a>
-                  <span class="file-desc"> — Auto-update manifest (Windows)</span>
-                </li>
-                <li>
-                  <a href="latest-linux.yml">latest-linux.yml</a>
-                  <span class="file-desc"> — Auto-update manifest (Linux)</span>
+                  <span class="file-desc"> — Auto-update manifest</span>
                 </li>
               </ul>
               
               <footer>
                 <p>🏫 SIMAK KHAS Kempek Cirebon</p>
-                <p><a href="https://github.com/sukenda/simak-exam-browser">GitHub Repository</a></p>
               </footer>
             </div>
           </body>
