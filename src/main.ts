@@ -107,34 +107,36 @@ app.whenReady().then(async () => {
         if (feedUrl) {
             logger.info(`Setting auto-update feed URL: ${feedUrl.replace(/:[^:@]+@/, ':****@')}`); // Hide token in logs
 
-            // Untuk provider 'generic', electron-updater akan:
-            // 1. Jika URL adalah folder (diakhiri /), append 'latest.yml' ke URL
-            // 2. Jika URL adalah file (.yml), langsung download file tersebut
+            // Untuk provider 'generic', electron-updater secara otomatis:
+            // - Menambahkan /{channel}.yml ke base URL
+            // - Default channel adalah 'latest' → latest.yml
             //
             // Kita menggunakan GitHub Pages dengan URL folder:
             // https://sukenda.github.io/simak-exam-browser/
             // 
-            // Untuk Windows 32-bit (ia32), gunakan latest-ia32.yml
-            // Untuk Windows 64-bit (x64), gunakan latest.yml
-            let updateFeedUrl = feedUrl;
-            if (process.arch === 'ia32') {
-                // Untuk 32-bit, append latest-ia32.yml
-                updateFeedUrl = feedUrl.endsWith('/') 
-                    ? `${feedUrl}latest-ia32.yml` 
-                    : `${feedUrl}/latest-ia32.yml`;
-                logger.info('Using latest-ia32.yml for 32-bit Windows');
-            } else {
-                // Untuk 64-bit, append latest.yml (default)
-                updateFeedUrl = feedUrl.endsWith('/') 
-                    ? `${feedUrl}latest.yml` 
-                    : `${feedUrl}/latest.yml`;
-                logger.info('Using latest.yml for 64-bit Windows');
-            }
+            // Untuk Windows 32-bit (ia32), gunakan channel 'latest-ia32' → latest-ia32.yml
+            // Untuk Windows 64-bit (x64), gunakan channel default 'latest' → latest.yml
             
-            autoUpdater.setFeedURL({
-                provider: 'generic',
-                url: updateFeedUrl
-            });
+            // Pastikan base URL diakhiri dengan /
+            const baseUrl = feedUrl.endsWith('/') ? feedUrl : `${feedUrl}/`;
+            
+            if (process.arch === 'ia32') {
+                logger.info(`Using channel 'latest-ia32' for 32-bit Windows`);
+                logger.info(`Base URL: ${baseUrl}`);
+                autoUpdater.setFeedURL({
+                    provider: 'generic',
+                    url: baseUrl,
+                    channel: 'latest-ia32' // Will use latest-ia32.yml
+                });
+            } else {
+                logger.info(`Using default channel 'latest' for 64-bit Windows`);
+                logger.info(`Base URL: ${baseUrl}`);
+                autoUpdater.setFeedURL({
+                    provider: 'generic',
+                    url: baseUrl
+                    // Default channel is 'latest' → latest.yml
+                });
+            }
 
             // Konfigurasi autoUpdater
             autoUpdater.autoDownload = true;
