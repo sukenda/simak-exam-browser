@@ -1,0 +1,75 @@
+name: Build Windows
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python (untuk node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env file
+        run: |
+          @"
+          EXAM_APP_URL=${{ secrets.EXAM_APP_URL }}
+          ATTENTION_WEBHOOK_URL=${{ secrets.ATTENTION_WEBHOOK_URL }}
+          ADMIN_PIN=${{ secrets.ADMIN_PIN }}
+          ADMIN_SHORTCUT=${{ secrets.ADMIN_SHORTCUT }}
+          AUTO_UPDATE_URL=${{ secrets.AUTO_UPDATE_URL }}
+          SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+          "@ | Out-File -FilePath .env -Encoding utf8
+
+      - name: Build TypeScript
+        run: npm run build:ts
+
+      - name: Build native keyboard hook module
+        run: |
+          cd native/keyboard-hook
+          npm install
+          npm run rebuild
+        shell: pwsh
+
+      - name: Build Windows installer
+        run: npx electron-builder --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simak-exam-browser-windows
+          path: |
+            out/*.exe
+            out/*.exe.blockmap
+          retention-days: 30
+
+      - name: Upload to Release (jika tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            out/*.exe
+            out/*.exe.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
