@@ -1,4 +1,4 @@
-name: Build Windows
+name: Build Windows Native Module
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build-native-module:
     runs-on: windows-latest
 
     steps:
@@ -25,22 +25,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install main dependencies
         run: npm ci
-
-      - name: Create .env file
-        run: |
-          @"
-          EXAM_APP_URL=${{ secrets.EXAM_APP_URL }}
-          ATTENTION_WEBHOOK_URL=${{ secrets.ATTENTION_WEBHOOK_URL }}
-          ADMIN_PIN=${{ secrets.ADMIN_PIN }}
-          ADMIN_SHORTCUT=${{ secrets.ADMIN_SHORTCUT }}
-          AUTO_UPDATE_URL=${{ secrets.AUTO_UPDATE_URL }}
-          SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-          "@ | Out-File -FilePath .env -Encoding utf8
-
-      - name: Build TypeScript
-        run: npm run build:ts
 
       - name: Build native keyboard hook module
         run: |
@@ -51,27 +37,9 @@ jobs:
           npx node-gyp rebuild --target=$electronVersion --arch=x64 --dist-url=https://electronjs.org/headers
         shell: pwsh
 
-      - name: Build Windows installer
-        run: npx electron-builder --win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows artifact
+      - name: Upload native module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: simak-exam-browser-windows
-          path: |
-            out/*.exe
-            out/*.exe.blockmap
-          retention-days: 30
-
-      - name: Upload to Release (jika tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            out/*.exe
-            out/*.exe.blockmap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          name: keyboard-hook-windows-x64
+          path: native/keyboard-hook/build/Release/
+          retention-days: 90
