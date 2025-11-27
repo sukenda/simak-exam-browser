@@ -329,7 +329,12 @@ function openAdminWindow() {
         adminWindow.focus();
         return;
     }
+    if (!examWindow || examWindow.isDestroyed()) {
+        logger.warn('Cannot open admin window: exam window not available');
+        return;
+    }
     adminWindow = createAdminWindow({
+        parent: examWindow,
         onClosed: () => {
             adminWindow = null;
         }
