@@ -1,17 +1,33 @@
-name: Build Windows Native Module
+name: Build and Release
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without v prefix, e.g., 1.0.0)'
+        required: false
+        default: ''
+
+env:
+  NODE_ENV: development
+  EXAM_APP_URL: ${{ secrets.EXAM_APP_URL || 'https://simakkhaskempek.com/' }}
+  ATTENTION_WEBHOOK_URL: ${{ secrets.ATTENTION_WEBHOOK_URL || 'https://api.simakkhaskempek.com/' }}
+  ADMIN_PIN: ${{ secrets.ADMIN_PIN || 'khashebat' }}
+  ADMIN_SHORTCUT: ${{ secrets.ADMIN_SHORTCUT || 'Ctrl+Alt+Shift+A' }}
+  SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  build-native-module:
+  # ============================================================
+  # Build Windows (.exe) with Native Module
+  # ============================================================
+  build-windows:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -20,26 +36,430 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Setup Python (untuk node-gyp)
+      - name: Get version from tag or input
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Update package version
+        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+
+      - name: Create .env file
+        shell: bash
+        run: |
+          # GitHub Pages URL for auto-update
+          REPO_NAME="${{ github.repository }}"
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME#*/}"
+          
+          echo "EXAM_APP_URL=${{ env.EXAM_APP_URL }}" > .env
+          echo "ATTENTION_WEBHOOK_URL=${{ env.ATTENTION_WEBHOOK_URL }}" >> .env
+          echo "ADMIN_PIN=${{ env.ADMIN_PIN }}" >> .env
+          echo "ADMIN_SHORTCUT=${{ env.ADMIN_SHORTCUT }}" >> .env
+          echo "AUTO_UPDATE_URL=${PAGES_URL}/" >> .env
+          
+          if [ -n "${{ env.SENTRY_DSN }}" ]; then
+            echo "SENTRY_DSN=${{ env.SENTRY_DSN }}" >> .env
+            echo "SENTRY_DSN configured"
+          fi
+          
+          echo "============================================================"
+          echo "AUTO_UPDATE_URL: ${PAGES_URL}/"
+          echo "============================================================"
+
+      - name: Build TypeScript
+        run: npm run build:ts
+
+      # ============================================================
+      # Build Native Keyboard Hook Module (Windows Only)
+      # ============================================================
+      - name: Setup Python for node-gyp
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install main dependencies
-        run: npm ci
+      - name: Install native module dependencies
+        working-directory: native/keyboard-hook
+        run: npm install
 
       - name: Build native keyboard hook module
+        working-directory: native/keyboard-hook
         run: |
-          cd native/keyboard-hook
-          npm install
-          $electronVersion = node -p "require('electron/package.json').version"
-          Write-Host "Building for Electron version: $electronVersion"
-          npx node-gyp rebuild --target=$electronVersion --arch=x64 --dist-url=https://electronjs.org/headers
-        shell: pwsh
+          echo "Building native keyboard hook module..."
+          npx node-gyp rebuild --target=28.3.3 --arch=x64 --dist-url=https://electronjs.org/headers
+          echo "Native module built successfully!"
 
-      - name: Upload native module artifact
+      - name: Verify native module
+        shell: bash
+        run: |
+          if [ -f "native/keyboard-hook/build/Release/keyboard-hook.node" ]; then
+            echo "✅ keyboard-hook.node built successfully!"
+            ls -la native/keyboard-hook/build/Release/
+          else
+            echo "❌ ERROR: keyboard-hook.node NOT FOUND!"
+            exit 1
+          fi
+
+      # ============================================================
+      # Build Electron App for Windows
+      # ============================================================
+      - name: Build Windows installer
+        run: npx electron-builder --win --publish never
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          echo "=== Build output ==="
+          ls -la out/ || echo "out folder not found"
+          
+          echo "=== Checking native module in output ==="
+          NATIVE_DIR="out/win-unpacked/resources/native/keyboard-hook"
+          if [ -d "$NATIVE_DIR" ]; then
+            echo "✅ Native module directory exists!"
+            ls -laR "$NATIVE_DIR"
+          else
+            echo "⚠️ Native module directory not found, searching..."
+            find out/ -name "keyboard-hook.node" 2>/dev/null || echo "Not found"
+          fi
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: keyboard-hook-windows-x64
-          path: native/keyboard-hook/build/Release/
-          retention-days: 90
+          name: windows-build
+          path: |
+            out/*.exe
+            out/latest.yml
+          retention-days: 30
+
+  # ============================================================
+  # Build Linux (.deb)
+  # ============================================================
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Get version from tag or input
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Update package version
+        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+
+      - name: Create .env file
+        run: |
+          # GitHub Pages URL for auto-update
+          REPO_NAME="${{ github.repository }}"
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME#*/}"
+          
+          echo "EXAM_APP_URL=${{ env.EXAM_APP_URL }}" > .env
+          echo "ATTENTION_WEBHOOK_URL=${{ env.ATTENTION_WEBHOOK_URL }}" >> .env
+          echo "ADMIN_PIN=${{ env.ADMIN_PIN }}" >> .env
+          echo "ADMIN_SHORTCUT=${{ env.ADMIN_SHORTCUT }}" >> .env
+          echo "AUTO_UPDATE_URL=${PAGES_URL}/" >> .env
+          
+          if [ -n "${{ env.SENTRY_DSN }}" ]; then
+            echo "SENTRY_DSN=${{ env.SENTRY_DSN }}" >> .env
+            echo "SENTRY_DSN configured"
+          fi
+
+      - name: Build TypeScript
+        run: npm run build:ts
+
+      - name: Build Linux .deb package
+        run: npx electron-builder --linux --publish never
+
+      - name: Verify build output
+        run: |
+          echo "=== Build output ==="
+          ls -la out/ || echo "out folder not found"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            out/*.deb
+            out/latest-linux.yml
+          retention-days: 30
+
+  # ============================================================
+  # Create GitHub Release
+  # ============================================================
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: artifacts/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+          path: artifacts/linux
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: List artifacts
+        run: |
+          echo "=== Windows artifacts ==="
+          ls -la artifacts/windows/
+          echo "=== Linux artifacts ==="
+          ls -la artifacts/linux/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "SIMAK Exam Browser v${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## 📦 SIMAK Exam Browser v${{ steps.version.outputs.VERSION }}
+            
+            ### Download
+            
+            #### 🪟 Windows
+            - **simak-exam-browser-Setup-${{ steps.version.outputs.VERSION }}.exe** - Windows Installer
+            
+            #### 🐧 Linux Ubuntu/Debian
+            - **simak-exam-browser-${{ steps.version.outputs.VERSION }}-linux-amd64.deb** - Debian Package
+            - Install: `sudo dpkg -i simak-exam-browser-${{ steps.version.outputs.VERSION }}-linux-amd64.deb`
+            - Fix dependencies: `sudo apt-get install -f`
+            
+            ### 🔄 Auto Update
+            Aplikasi akan otomatis mengecek update saat dibuka.
+            
+            ### ✨ Features
+            - Keyboard blocking (Windows key, Alt+Tab, etc.)
+            - Native keyboard hook for Windows
+            - Kiosk mode for secure exam environment
+          files: |
+            artifacts/windows/*.exe
+            artifacts/windows/latest.yml
+            artifacts/linux/*.deb
+            artifacts/linux/latest-linux.yml
+          draft: false
+          prerelease: false
+
+  # ============================================================
+  # Deploy to GitHub Pages (for auto-update)
+  # ============================================================
+  deploy-pages:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: artifacts/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+          path: artifacts/linux
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Prepare Pages content
+        run: |
+          mkdir -p public
+          
+          # Copy Windows files
+          cp artifacts/windows/*.exe public/ || echo "No .exe found"
+          cp artifacts/windows/latest.yml public/ || echo "No latest.yml found"
+          
+          # Copy Linux files
+          cp artifacts/linux/*.deb public/ || echo "No .deb found"
+          cp artifacts/linux/latest-linux.yml public/ || echo "No latest-linux.yml found"
+          
+          # Create index.html
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          cat > public/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SIMAK Exam Browser - Downloads</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                max-width: 900px; 
+                margin: 0 auto; 
+                padding: 40px 20px;
+                background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                min-height: 100vh;
+              }
+              .container {
+                background: white;
+                border-radius: 16px;
+                padding: 40px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+              }
+              h1 { color: #1b5e20; margin-bottom: 8px; font-size: 2.5em; }
+              .subtitle { color: #666; font-size: 1.1em; margin-bottom: 30px; }
+              .version-badge {
+                display: inline-block;
+                background: linear-gradient(135deg, #2e7d32, #1b5e20);
+                color: white;
+                padding: 8px 20px;
+                border-radius: 25px;
+                font-weight: 600;
+                margin-bottom: 30px;
+              }
+              .platforms {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 24px;
+                margin: 30px 0;
+              }
+              .platform-card {
+                background: #f8f9fa;
+                border-radius: 12px;
+                padding: 24px;
+                border: 2px solid #e9ecef;
+                transition: all 0.3s ease;
+              }
+              .platform-card:hover {
+                border-color: #2e7d32;
+                box-shadow: 0 5px 20px rgba(46,125,50,0.15);
+              }
+              .platform-icon { font-size: 48px; margin-bottom: 16px; }
+              .platform-title { font-size: 1.3em; font-weight: 600; color: #333; margin-bottom: 12px; }
+              .download-btn { 
+                display: inline-block; 
+                background: linear-gradient(135deg, #2e7d32, #1b5e20);
+                color: white; 
+                padding: 14px 28px; 
+                text-decoration: none; 
+                border-radius: 8px; 
+                font-weight: 600;
+                transition: all 0.3s ease;
+                width: 100%;
+                text-align: center;
+              }
+              .download-btn:hover { 
+                background: linear-gradient(135deg, #1b5e20, #0d4a12);
+                transform: translateY(-2px);
+              }
+              .install-cmd {
+                background: #263238;
+                color: #80cbc4;
+                padding: 12px 16px;
+                border-radius: 8px;
+                font-family: monospace;
+                font-size: 0.85em;
+                margin-top: 12px;
+              }
+              footer { margin-top: 40px; text-align: center; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🎓 SIMAK Exam Browser</h1>
+              <p class="subtitle">Aplikasi browser khusus untuk ujian dengan fitur keamanan</p>
+              <div class="version-badge">📦 Versi ${VERSION}</div>
+              
+              <div class="platforms">
+                <div class="platform-card">
+                  <div class="platform-icon">🪟</div>
+                  <div class="platform-title">Windows</div>
+                  <p style="color: #666; margin-bottom: 16px;">Windows 10/11 (64-bit)</p>
+                  <a href="simak-exam-browser-Setup-${VERSION}.exe" class="download-btn">
+                    ⬇️ Download Installer
+                  </a>
+                </div>
+                
+                <div class="platform-card">
+                  <div class="platform-icon">🐧</div>
+                  <div class="platform-title">Linux Ubuntu</div>
+                  <p style="color: #666; margin-bottom: 16px;">Ubuntu/Debian (64-bit)</p>
+                  <a href="simak-exam-browser-${VERSION}-linux-amd64.deb" class="download-btn">
+                    ⬇️ Download .deb Package
+                  </a>
+                  <div class="install-cmd">
+                    sudo dpkg -i simak-exam-browser-${VERSION}-linux-amd64.deb
+                  </div>
+                </div>
+              </div>
+              
+              <footer>
+                <p>🏫 SIMAK KHAS Kempek Cirebon</p>
+              </footer>
+            </div>
+          </body>
+          </html>
+          EOF
+          
+          echo "=== Pages content ==="
+          ls -la public/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
