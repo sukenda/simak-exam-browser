@@ -292,13 +292,15 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: read
+      contents: write
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Get version
         id: version
         run: |
@@ -554,6 +556,7 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        continue-on-error: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -563,4 +566,33 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Check deployment status
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          echo "::error::GitHub Pages deployment failed!"
+          echo ""
+          echo "⚠️  Common causes:"
+          echo "1. Repository is PRIVATE - GitHub Pages only works for PUBLIC repositories (free)"
+          echo "2. GitHub Pages is not enabled in repository settings"
+          echo "3. GitHub Pages is not configured to use GitHub Actions"
+          echo ""
+          echo "📋 To fix this:"
+          echo ""
+          echo "If repository is PRIVATE:"
+          echo "1. Go to: https://github.com/${{ github.repository }}/settings"
+          echo "2. Scroll to 'Danger Zone' → 'Change visibility' → 'Make public'"
+          echo "3. Then continue with steps below"
+          echo ""
+          echo "If repository is PUBLIC:"
+          echo "1. Go to: https://github.com/${{ github.repository }}/settings/pages"
+          echo "2. Under 'Source', select 'GitHub Actions' (NOT 'Deploy from a branch')"
+          echo "3. Click 'Save'"
+          echo "4. Re-run this workflow"
+          echo ""
+          echo "📖 For detailed instructions, see: docs/GITHUB_PAGES_SETUP.md"
+          echo ""
+          echo "ℹ️  Note: Auto-update will still work via GitHub Releases, but latest.yml files won't be available on GitHub Pages."
+          echo "   You can manually download latest.yml from the Release artifacts."
 

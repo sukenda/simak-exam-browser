@@ -13,7 +13,7 @@ SIMAK Exam Browser adalah aplikasi desktop yang dirancang khusus untuk mengamank
 - ✅ **Blokir Context Menu** - Klik kanan tidak berfungsi
 - ✅ **Blokir Copy/Paste** - Clipboard diblokir untuk mencegah salin-tempel
 - ✅ **Monitoring Fokus Window** - Mendeteksi dan melaporkan kehilangan fokus
-- ✅ **Auto Update** - Update otomatis dari GitLab Releases
+- ✅ **Auto Update** - Update otomatis dari GitHub Releases
 - ✅ **Dialog Peringatan** - Notifikasi visual saat user mencoba aksi terlarang
 - ✅ **Admin Panel** - Panel admin tersembunyi untuk keluar aplikasi
 - ✅ **Info Aplikasi** - Tekan F12 untuk melihat informasi aplikasi
