@@ -1,0 +1,10 @@
+node_modules
+.idea
+dist
+*.log
+.DS_Store
+.env
+out
+# Native module - only track prebuilt .node file
+native/keyboard-hook/node_modules
+

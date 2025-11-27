@@ -1,0 +1,146 @@
+{
+  "name": "simak-exam-browser",
+  "version": "0.1.0",
+  "description": "Exam browser for SIMAK KHAS Kempek",
+  "main": "dist/main.js",
+  "license": "MIT",
+  "author": {
+    "name": "SIMAK KHAS Kempek",
+    "email": "simakkhas@gmail.com"
+  },
+  "homepage": "https://simak-khas-kempek.gitlab.io/simak-exam-browser/",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/simak-khas-kempek/simak-exam-browser.git"
+  },
+  "scripts": {
+    "clean": "npx rimraf dist || rm -rf dist",
+    "build:ts": "node esbuild.config.mjs",
+    "build:native": "cd native/keyboard-hook && npm install && npm run rebuild || echo 'Native module build skipped (optional)'",
+    "build": "npm run clean && npm run build:ts && npm run build:native && npx electron-builder --win",
+    "build:linux": "npm run clean && npm run build:ts && npx electron-builder --linux",
+    "build:all": "npm run clean && npm run build:ts && npm run build:native && npx electron-builder --win --linux",
+    "build:watch": "node esbuild.config.mjs --watch",
+    "dev": "npm-run-all -p build:watch start:electron",
+    "start:electron": "wait-on dist/main.js && cross-env NODE_ENV=development electron .",
+    "lint": "tsc --noEmit",
+    "postinstall": "npx electron-builder install-app-deps || echo 'install-app-deps skipped'",
+    "rebuild:native": "cd native/keyboard-hook && npm run rebuild"
+  },
+  "dependencies": {
+    "@sentry/electron": "^7.3.0",
+    "dotenv": "^16.4.5",
+    "electron-log": "^5.2.1",
+    "electron-updater": "^6.1.7",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "cross-env": "^7.0.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "esbuild": "^0.24.0",
+    "fs-extra": "^11.2.0",
+    "npm-run-all": "^4.1.5",
+    "rimraf": "^5.0.7",
+    "typescript": "^5.6.2",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.simak.exam.browser",
+    "productName": "simak-exam-browser",
+    "electronVersion": "28.3.3",
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "native/keyboard-hook/index.js",
+      "native/keyboard-hook/build/**/*"
+    ],
+    "extraMetadata": {
+      "main": "dist/main.js"
+    },
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "asar": true,
+    "extraFiles": [
+      {
+        "from": ".env",
+        "to": ".",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "native/keyboard-hook",
+        "to": "native/keyboard-hook",
+        "filter": [
+          "index.js",
+          "build/**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "icons/win/simak-icon-circle.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true,
+      "deleteAppDataOnUninstall": true
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icons/linux",
+      "category": "Education",
+      "synopsis": "Exam browser for SIMAK KHAS Kempek",
+      "description": "Aplikasi browser khusus untuk ujian SIMAK KHAS Kempek dengan fitur kunci keyboard dan monitoring",
+      "desktop": {
+        "Name": "SIMAK Exam Browser",
+        "Comment": "Exam browser for SIMAK KHAS Kempek",
+        "Categories": "Education;Network;",
+        "StartupWMClass": "simak-exam-browser"
+      },
+      "artifactName": "${productName}-${version}-linux-amd64.${ext}"
+    },
+    "deb": {
+      "depends": [
+        "libnss3",
+        "libatk-bridge2.0-0",
+        "libdrm2",
+        "libxkbcommon0",
+        "libxcomposite1",
+        "libxdamage1",
+        "libxfixes3",
+        "libxrandr2",
+        "libgbm1",
+        "libasound2"
+      ],
+      "packageCategory": "Education",
+      "priority": "optional",
+      "maintainer": "SIMAK KHAS Kempek <simakkhas@gmail.com>"
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://simak-khas-kempek.gitlab.io/simak-exam-browser/"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

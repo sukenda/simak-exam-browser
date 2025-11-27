@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mode Admin</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <div class="header">
+        <div class="icon-wrapper">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H11V21H5V3H13V9H21ZM14 10V12H22V10H14ZM14 14V16H22V14H14ZM14 18V20H22V18H14Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <h1>Mode Admin</h1>
+        <p class="subtitle">Masukkan PIN untuk menutup aplikasi</p>
+      </div>
+      
+      <form id="admin-form">
+        <div class="input-wrapper">
+          <label for="pin">PIN Admin</label>
+          <input
+            id="pin"
+            type="password"
+            inputmode="numeric"
+            placeholder="••••••"
+            autocomplete="off"
+            required
+            minlength="4"
+            autofocus
+          />
+          <svg class="input-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 1C8.96243 1 6.5 3.46243 6.5 6.5C6.5 9.53757 8.96243 12 12 12C15.0376 12 17.5 9.53757 17.5 6.5C17.5 3.46243 15.0376 1 12 1ZM12 3C13.933 3 15.5 4.567 15.5 6.5C15.5 8.433 13.933 10 12 10C10.067 10 8.5 8.433 8.5 6.5C8.5 4.567 10.067 3 12 3ZM12 13C8.04288 13 4.73512 15.2484 3.17773 18.5293C2.58105 19.8066 3.6001 21 5 21H19C20.3999 21 21.4189 19.8066 20.8223 18.5293C19.2649 15.2484 15.9571 13 12 13ZM5.05078 19C5.55078 16.25 8.5 14 12 14C15.5 14 18.4492 16.25 18.9492 19H5.05078Z" fill="currentColor"/>
+          </svg>
+        </div>
+        
+        <div id="status" role="alert" aria-live="polite" class="status-message"></div>
+        
+        <div class="actions">
+          <button type="button" id="cancel" class="btn-cancel">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor"/>
+            </svg>
+            Batalkan
+          </button>
+          <button type="submit" class="btn-submit">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor"/>
+            </svg>
+            Verifikasi & Keluar
+          </button>
+        </div>
+      </form>
+    </main>
+    <script>
+      const form = document.getElementById('admin-form');
+      const pinInput = document.getElementById('pin');
+      const cancel = document.getElementById('cancel');
+      const status = document.getElementById('status');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        status.className = 'status-message status-loading';
+        status.innerHTML = '<svg class="spinner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="31.416"><animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416;0 31.416" repeatCount="indefinite"/><animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416;-31.416" repeatCount="indefinite"/></circle></svg> Memverifikasi...';
+        
+        const pin = pinInput.value.trim();
+        const result = await window.adminBridge.submitPin(pin);
+        
+        if (result?.success) {
+          status.className = 'status-message status-success';
+          status.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor"/></svg> PIN benar. Menutup aplikasi...';
+          pinInput.disabled = true;
+        } else {
+          status.className = 'status-message status-error';
+          status.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="currentColor"/></svg> PIN salah. Silakan coba lagi.';
+          pinInput.value = '';
+          pinInput.focus();
+        }
+      });
+
+      cancel.addEventListener('click', () => {
+        window.adminBridge.cancel();
+      });
+
+      // Auto focus on input when window opens
+      pinInput.focus();
+    </script>
+  </body>
+</html>

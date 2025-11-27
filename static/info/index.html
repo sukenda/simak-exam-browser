@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <title>Informasi Aplikasi</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <div class="header">
+        <div class="icon-container">
+          <img src="./app-icon.ico" alt="SIMAK Icon" class="app-icon" />
+        </div>
+        <h1>SIMAK Exam Browser</h1>
+        <p class="subtitle">Simak KHAS Kempek Cirebon</p>
+      </div>
+
+      <div class="content">
+        <section class="info-section">
+          <h2>Informasi Versi</h2>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="label">Versi Aplikasi</span>
+              <span class="value" id="version">-</span>
+            </div>
+            <div class="info-item">
+              <span class="label">Nama Produk</span>
+              <span class="value" id="productName">-</span>
+            </div>
+            <div class="info-item">
+              <span class="label">Platform</span>
+              <span class="value" id="platform">-</span>
+            </div>
+            <div class="info-item">
+              <span class="label">Arsitektur</span>
+              <span class="value" id="arch">-</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="info-section">
+          <h2>Kontak & Dukungan</h2>
+          <p class="support-text">
+            Untuk bantuan atau pertanyaan, hubungi administrator sistem.
+          </p>
+        </section>
+      </div>
+
+      <div class="footer">
+        <button id="close-btn" class="close-button">Tutup</button>
+      </div>
+    </main>
+    <script>
+      (async () => {
+        const info = await window.infoBridge.getAppInfo();
+        document.getElementById('version').textContent = info.version;
+        document.getElementById('productName').textContent = info.productName;
+        document.getElementById('platform').textContent = info.platform;
+        document.getElementById('arch').textContent = info.arch;
+      })();
+
+      document.getElementById('close-btn').addEventListener('click', () => {
+        window.infoBridge.close();
+      });
+    </script>
+  </body>
+</html>
+

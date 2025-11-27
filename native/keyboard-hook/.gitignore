@@ -1,0 +1,8 @@
+# Ignore intermediate build files but keep prebuilt .node
+build/*
+!build/Release/
+build/Release/*
+!build/Release/keyboard-hook.node
+node_modules/
+*.log
+
