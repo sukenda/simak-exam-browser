@@ -126,12 +126,15 @@ jobs:
       - name: Build Windows 64-bit Installer
         run: npx electron-builder --win --x64 --publish never
 
+      - name: Clean latest.yml (keep only x64 files)
+        run: node scripts/clean-latest-yml.js out/latest.yml out/latest.yml x64
+
       - name: List output files
         shell: bash
         run: |
           echo "=== Output files ==="
           ls -la out/ || echo "out folder not found"
-          echo "=== latest.yml ==="
+          echo "=== latest.yml (x64) ==="
           cat out/latest.yml || echo "latest.yml not found"
 
       - name: Upload Windows 64-bit artifacts
@@ -253,13 +256,26 @@ jobs:
       - name: Build Windows 32-bit Installer
         run: npx electron-builder --win --ia32 --publish never
 
+      - name: Rename latest.yml to latest-ia32.yml
+        shell: bash
+        run: |
+          if [ -f "out/latest.yml" ]; then
+            mv out/latest.yml out/latest-ia32.yml
+            echo "✅ Renamed latest.yml to latest-ia32.yml"
+          else
+            echo "⚠️ latest.yml not found"
+          fi
+
+      - name: Clean latest-ia32.yml (keep only ia32 files)
+        run: node scripts/clean-latest-yml.js out/latest-ia32.yml out/latest-ia32.yml ia32
+
       - name: List output files
         shell: bash
         run: |
           echo "=== Output files ==="
           ls -la out/ || echo "out folder not found"
-          echo "=== latest.yml ==="
-          cat out/latest.yml || echo "latest.yml not found"
+          echo "=== latest-ia32.yml ==="
+          cat out/latest-ia32.yml || echo "latest-ia32.yml not found"
 
       - name: Upload Windows 32-bit artifacts
         uses: actions/upload-artifact@v4
@@ -267,7 +283,7 @@ jobs:
           name: windows-ia32-build
           path: |
             out/*ia32*.exe
-            out/latest.yml
+            out/latest-ia32.yml
           retention-days: 30
 
   # ============================================================
@@ -334,6 +350,7 @@ jobs:
             artifacts/windows-x64/*.exe
             artifacts/windows-x64/latest.yml
             artifacts/windows-ia32/*.exe
+            artifacts/windows-ia32/latest-ia32.yml
           draft: false
           prerelease: false
 
@@ -380,10 +397,11 @@ jobs:
           
           # Copy Windows 64-bit files
           cp artifacts/windows-x64/*.exe public/ || echo "No Windows 64-bit exe found"
-          cp artifacts/windows-x64/latest.yml public/ || echo "No latest.yml found"
+          cp artifacts/windows-x64/latest.yml public/latest.yml || echo "No latest.yml found"
           
           # Copy Windows 32-bit files
           cp artifacts/windows-ia32/*.exe public/ || echo "No Windows 32-bit exe found"
+          cp artifacts/windows-ia32/latest-ia32.yml public/latest-ia32.yml || echo "No latest-ia32.yml found"
           
           # Create index.html
           cat > public/index.html << 'HTMLEOF'
@@ -582,7 +600,11 @@ jobs:
                 </li>
                 <li>
                   <a href="latest.yml">latest.yml</a>
-                  <span class="file-desc"> — Auto-update manifest</span>
+                  <span class="file-desc"> — Auto-update manifest (Windows 64-bit)</span>
+                </li>
+                <li>
+                  <a href="latest-ia32.yml">latest-ia32.yml</a>
+                  <span class="file-desc"> — Auto-update manifest (Windows 32-bit)</span>
                 </li>
               </ul>
               

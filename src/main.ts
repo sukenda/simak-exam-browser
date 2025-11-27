@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, nativeTheme, globalShortcut, crashReporter} from 'electron';
+import {app, BrowserWindow, ipcMain, nativeTheme, globalShortcut, crashReporter, dialog} from 'electron';
 import {autoUpdater} from 'electron-updater';
 import {createExamWindow} from './windows/createExamWindow';
 import {createSplashWindow} from './windows/createSplashWindow';
@@ -111,21 +111,56 @@ app.whenReady().then(async () => {
             // 1. Jika URL adalah folder (diakhiri /), append 'latest.yml' ke URL
             // 2. Jika URL adalah file (.yml), langsung download file tersebut
             //
-            // Kita menggunakan GitLab Pages dengan URL folder:
-            // https://simak-khas-kempek.gitlab.io/simak-exam-browser/
-            // electron-updater akan otomatis menambahkan 'latest.yml'
+            // Kita menggunakan GitHub Pages dengan URL folder:
+            // https://sukenda.github.io/simak-exam-browser/
+            // 
+            // Untuk Windows 32-bit (ia32), gunakan latest-ia32.yml
+            // Untuk Windows 64-bit (x64), gunakan latest.yml
+            let updateFeedUrl = feedUrl;
+            if (process.arch === 'ia32') {
+                // Untuk 32-bit, append latest-ia32.yml
+                updateFeedUrl = feedUrl.endsWith('/') 
+                    ? `${feedUrl}latest-ia32.yml` 
+                    : `${feedUrl}/latest-ia32.yml`;
+                logger.info('Using latest-ia32.yml for 32-bit Windows');
+            } else {
+                // Untuk 64-bit, append latest.yml (default)
+                updateFeedUrl = feedUrl.endsWith('/') 
+                    ? `${feedUrl}latest.yml` 
+                    : `${feedUrl}/latest.yml`;
+                logger.info('Using latest.yml for 64-bit Windows');
+            }
+            
             autoUpdater.setFeedURL({
                 provider: 'generic',
-                url: feedUrl
+                url: updateFeedUrl
             });
 
-            // Setup event listeners dengan logging lebih detail
+            // Konfigurasi autoUpdater
+            autoUpdater.autoDownload = true;
+            autoUpdater.autoInstallOnAppQuit = true;
+
+            // Setup event listeners dengan logging dan dialog
             autoUpdater.on('checking-for-update', () => {
                 logger.info('Checking for updates...');
             });
 
             autoUpdater.on('update-available', (info) => {
                 logger.info('Update available:', info);
+                const newVersion = info.version;
+                const currentVersion = app.getVersion();
+                
+                // Tampilkan dialog notifikasi
+                if (examWindow && !examWindow.isDestroyed()) {
+                    dialog.showMessageBox(examWindow, {
+                        type: 'info',
+                        title: 'Update Tersedia',
+                        message: `Versi baru tersedia: ${newVersion}`,
+                        detail: `Versi saat ini: ${currentVersion}\n\nUpdate akan didownload secara otomatis.`,
+                        buttons: ['OK'],
+                        defaultId: 0
+                    }).catch(err => logger.error('Error showing update dialog:', err));
+                }
             });
 
             autoUpdater.on('update-not-available', (info) => {
@@ -134,16 +169,40 @@ app.whenReady().then(async () => {
 
             autoUpdater.on('update-downloaded', (info) => {
                 logger.info('Update downloaded successfully:', info);
-                logger.info('Update downloaded, restarting to install');
-                // Auto install setelah 3 detik untuk memberi waktu user
-                setTimeout(() => {
-                    autoUpdater.quitAndInstall();
-                }, 3000);
+                const newVersion = info.version;
+                
+                // Tampilkan dialog dengan opsi install sekarang atau nanti
+                if (examWindow && !examWindow.isDestroyed()) {
+                    dialog.showMessageBox(examWindow, {
+                        type: 'info',
+                        title: 'Update Siap Diinstall',
+                        message: `Update versi ${newVersion} telah didownload.`,
+                        detail: 'Klik "Install Sekarang" untuk restart dan install update, atau "Nanti" untuk install saat aplikasi ditutup.',
+                        buttons: ['Install Sekarang', 'Nanti'],
+                        defaultId: 0,
+                        cancelId: 1
+                    }).then((result) => {
+                        if (result.response === 0) {
+                            logger.info('User chose to install update now');
+                            setTimeout(() => {
+                                autoUpdater.quitAndInstall(false, true);
+                            }, 1000);
+                        } else {
+                            logger.info('User chose to install update later');
+                        }
+                    }).catch(err => logger.error('Error showing update dialog:', err));
+                } else {
+                    // Jika window tidak tersedia, install otomatis setelah 5 detik
+                    logger.info('Window not available, auto-installing in 5 seconds');
+                    setTimeout(() => {
+                        autoUpdater.quitAndInstall(false, true);
+                    }, 5000);
+                }
             });
 
             autoUpdater.on('download-progress', (progressObj) => {
-                const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
-                logger.debug(message);
+                const message = `Download: ${Math.round(progressObj.percent)}% (${Math.round(progressObj.transferred / 1024 / 1024)}MB / ${Math.round(progressObj.total / 1024 / 1024)}MB)`;
+                logger.info(message);
             });
 
             autoUpdater.on('error', (error) => {
@@ -167,7 +226,9 @@ app.whenReady().then(async () => {
                 }
                 lastUpdateCheck = now;
                 logger.info(`Triggering auto-update check (${reason})`);
-                autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+                // Gunakan checkForUpdates() bukan checkForUpdatesAndNotify()
+                // agar dialog custom kita yang tampil
+                autoUpdater.checkForUpdates().catch((error) => {
                     logger.error(`Failed to check for updates (${reason}):`, error);
                 });
             };
