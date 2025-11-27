@@ -53,8 +53,7 @@
     "files": [
       "dist/**/*",
       "package.json",
-      "native/keyboard-hook/index.js",
-      "native/keyboard-hook/build/**/*"
+      "native/keyboard-hook/**/*"
     ],
     "extraMetadata": {
       "main": "dist/main.js"
@@ -64,20 +63,15 @@
       "buildResources": "build"
     },
     "asar": true,
+    "asarUnpack": [
+      "native/keyboard-hook/**/*"
+    ],
     "extraFiles": [
       {
         "from": ".env",
         "to": ".",
         "filter": [
           "**/*"
-        ]
-      },
-      {
-        "from": "native/keyboard-hook",
-        "to": "native/keyboard-hook",
-        "filter": [
-          "index.js",
-          "build/**/*"
         ]
       }
     ],

@@ -19,6 +19,12 @@ export function loadNativeKeyboardHook(): boolean {
     return available;
   }
 
+  // Only load on Windows
+  if (process.platform !== 'win32') {
+    logger.info('Native keyboard hook is only available on Windows');
+    return false;
+  }
+
   // Try multiple possible locations (dev vs packaged vs asar-unpacked)
   const path = require('path');
   const { app } = require('electron');
@@ -28,23 +34,36 @@ export function loadNativeKeyboardHook(): boolean {
     app && typeof app.getAppPath === 'function' ? app.getAppPath() : process.cwd();
 
   if (app && app.isPackaged) {
+    // In packaged app, native modules are in app.asar.unpacked
+    // Priority 1: app.asar.unpacked (when using asarUnpack in electron-builder)
     if (process.resourcesPath) {
-      candidatePaths.push(path.join(process.resourcesPath, 'native', 'keyboard-hook'));
       candidatePaths.push(
         path.join(process.resourcesPath, 'app.asar.unpacked', 'native', 'keyboard-hook')
       );
     }
+    // Priority 2: Using appPath which points to app.asar
     if (appPath) {
-      candidatePaths.push(path.join(path.dirname(appPath), 'native', 'keyboard-hook'));
+      // Replace app.asar with app.asar.unpacked
+      const unpackedPath = appPath.replace('app.asar', 'app.asar.unpacked');
+      candidatePaths.push(path.join(unpackedPath, 'native', 'keyboard-hook'));
+    }
+    // Priority 3: Fallback to resources/native (for extraFiles)
+    if (process.resourcesPath) {
+      candidatePaths.push(path.join(process.resourcesPath, 'native', 'keyboard-hook'));
+    }
+    // Priority 4: Installation directory root
+    if (process.resourcesPath) {
+      candidatePaths.push(path.join(path.dirname(process.resourcesPath), 'native', 'keyboard-hook'));
     }
   } else {
+    // Development mode
     if (appPath) {
       candidatePaths.push(path.join(appPath, 'native', 'keyboard-hook'));
-      candidatePaths.push(path.join(appPath, 'dist', 'native', 'keyboard-hook'));
     }
-    candidatePaths.push(path.join(__dirname, '../native/keyboard-hook'));
     candidatePaths.push(path.join(process.cwd(), 'native', 'keyboard-hook'));
   }
+
+  logger.info(`Looking for native keyboard hook in ${candidatePaths.length} locations...`);
 
   for (const candidate of candidatePaths) {
     try {
@@ -56,12 +75,13 @@ export function loadNativeKeyboardHook(): boolean {
       }
       const available = nativeModule.isAvailable();
       if (available) {
-        logger.info(`Native keyboard hook module loaded successfully from ${candidate}`);
+        logger.info(`✅ Native keyboard hook module loaded successfully from ${candidate}`);
         return true;
       }
       logger.warn(`Native keyboard hook module at ${candidate} reported unavailable`);
     } catch (error) {
-      logger.warn(`Failed to load native keyboard hook module from ${candidate}`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.debug(`Failed to load native keyboard hook module from ${candidate}: ${errorMessage}`);
     }
   }
 
