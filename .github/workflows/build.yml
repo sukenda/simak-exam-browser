@@ -104,8 +104,8 @@ jobs:
           cat > .env << EOF
           EXAM_APP_URL=${{ secrets.EXAM_APP_URL || 'https://simakkhaskempek.com/' }}
           ATTENTION_WEBHOOK_URL=${{ secrets.ATTENTION_WEBHOOK_URL || 'https://api.simakkhaskempek.com/' }}
-          ADMIN_PIN=${{ secrets.ADMIN_PIN || 'khashebat' }}
-          ADMIN_SHORTCUT=${{ secrets.ADMIN_SHORTCUT || 'Ctrl+Alt+Shift+A' }}
+          ADMIN_PIN=${{ secrets.ADMIN_PIN || 'simakkhaskempek' }}
+          ADMIN_SHORTCUT=${{ secrets.ADMIN_SHORTCUT || 'Ctrl+Alt+Shift+A+H' }}
           AUTO_UPDATE_URL=${PAGES_URL}/
           SENTRY_DSN=${{ secrets.SENTRY_DSN || '' }}
           EOF
