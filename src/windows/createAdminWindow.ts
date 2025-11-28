@@ -49,6 +49,11 @@ export function createAdminWindow(options: AdminWindowOptions) {
   const adminPath = join(app.getAppPath(), 'dist', 'static', 'admin', 'index.html');
   void window.loadFile(adminPath);
   
+  // Set skipTaskbar segera setelah window dibuat (sebelum ready-to-show)
+  // Ini membantu mencegah taskbar muncul sejak awal
+  window.setSkipTaskbar(true);
+  window.setMenuBarVisibility(false);
+  
   // Tampilkan window setelah siap
   window.once('ready-to-show', () => {
     // Set ulang skipTaskbar setelah window ready untuk memastikan taskbar tersembunyi
@@ -56,18 +61,34 @@ export function createAdminWindow(options: AdminWindowOptions) {
     window.setSkipTaskbar(true);
     window.setMenuBarVisibility(false);
     
-    window.show();
-    window.focus();
-    
-    // Pastikan parent tetap fullscreen/kiosk
-    if (parentWindow && !parentWindow.isDestroyed()) {
-      parentWindow.setFullScreen(true);
-    }
+    // Gunakan setTimeout kecil untuk memastikan semua setting sudah diterapkan
+    // sebelum window ditampilkan
+    setTimeout(() => {
+      window.setSkipTaskbar(true);
+      window.setMenuBarVisibility(false);
+      window.show();
+      window.focus();
+      
+      // Set sekali lagi setelah show untuk memastikan
+      window.setSkipTaskbar(true);
+      window.setMenuBarVisibility(false);
+      
+      // Pastikan parent tetap fullscreen/kiosk
+      if (parentWindow && !parentWindow.isDestroyed()) {
+        parentWindow.setFullScreen(true);
+      }
+    }, 10);
   });
 
   // Handler untuk memastikan taskbar tetap tersembunyi saat window mendapat fokus
   // Windows mungkin menampilkan taskbar saat input field mendapat fokus
   window.on('focus', () => {
+    window.setSkipTaskbar(true);
+    window.setMenuBarVisibility(false);
+  });
+
+  // Handler untuk memastikan taskbar tersembunyi saat window kehilangan fokus
+  window.on('blur', () => {
     window.setSkipTaskbar(true);
     window.setMenuBarVisibility(false);
   });
