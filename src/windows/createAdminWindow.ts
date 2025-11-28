@@ -51,6 +51,11 @@ export function createAdminWindow(options: AdminWindowOptions) {
   
   // Tampilkan window setelah siap
   window.once('ready-to-show', () => {
+    // Set ulang skipTaskbar setelah window ready untuk memastikan taskbar tersembunyi
+    // Ini penting karena Windows mungkin menampilkan taskbar saat ada input fields
+    window.setSkipTaskbar(true);
+    window.setMenuBarVisibility(false);
+    
     window.show();
     window.focus();
     
@@ -58,6 +63,19 @@ export function createAdminWindow(options: AdminWindowOptions) {
     if (parentWindow && !parentWindow.isDestroyed()) {
       parentWindow.setFullScreen(true);
     }
+  });
+
+  // Handler untuk memastikan taskbar tetap tersembunyi saat window mendapat fokus
+  // Windows mungkin menampilkan taskbar saat input field mendapat fokus
+  window.on('focus', () => {
+    window.setSkipTaskbar(true);
+    window.setMenuBarVisibility(false);
+  });
+
+  // Handler untuk memastikan taskbar tersembunyi saat window ditampilkan
+  window.on('show', () => {
+    window.setSkipTaskbar(true);
+    window.setMenuBarVisibility(false);
   });
 
   window.on('closed', () => {
