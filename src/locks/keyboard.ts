@@ -9,6 +9,7 @@ import {
   isNativeKeyboardHookAvailable,
   isNativeKeyboardHookInstalled
 } from './nativeKeyboard';
+import { cheatingTracker } from '../services/cheatingTracker';
 
 const blockedCombinations = new Set([
   // Ctrl + A sampai Z
@@ -421,6 +422,28 @@ function notifyShortcutViolation(
   }
   lastShortcutNotification = now;
   lastNotifiedCombo = payload.combo;
+  
+  // Track shortcut blocked event
+  const severity = payload.combo.includes('Ctrl+Alt+Delete') || 
+                   payload.combo.includes('Alt+Tab') || 
+                   payload.combo.includes('Windows') 
+                   ? 'critical' 
+                   : payload.combo.includes('Ctrl+C') || 
+                     payload.combo.includes('Ctrl+V') 
+                   ? 'high' 
+                   : 'medium';
+  
+  cheatingTracker.trackEvent(
+    'shortcut_blocked',
+    `${payload.combo} blocked`,
+    severity,
+    { 
+      keyCombo: payload.combo,
+      source: payload.source,
+      windowFocused: window.isFocused()
+    }
+  );
+  
   window.webContents.send('exam:warning', {
     combo: payload.combo,
     source: payload.source,

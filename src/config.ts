@@ -61,6 +61,7 @@ export function reloadConfig() {
   logger.info(`Loading .env from: ${envPath}`);
   logger.info(`EXAM_APP_URL: ${process.env.EXAM_APP_URL ?? 'not set, using default'}`);
   logger.info(`ATTENTION_WEBHOOK_URL: ${process.env.ATTENTION_WEBHOOK_URL ?? 'not set, using default'}`);
+  logger.info(`EXAM_REPORT_SECRET_KEY: ${process.env.EXAM_REPORT_SECRET_KEY ? 'configured' : 'not set'}`);
   
   // Update appConfig dengan nilai baru, gunakan default jika tidak ditemukan
   appConfig.examUrl = process.env.EXAM_APP_URL ?? DEFAULT_URL;
@@ -68,10 +69,12 @@ export function reloadConfig() {
   appConfig.adminPin = process.env.ADMIN_PIN ?? '123456';
   appConfig.adminShortcut = process.env.ADMIN_SHORTCUT ?? DEFAULT_SHORTCUT;
   appConfig.sentryDsn = process.env.SENTRY_DSN;
+  appConfig.examReportSecretKey = process.env.EXAM_REPORT_SECRET_KEY;
   
   logger.info(`Final config - examUrl: ${appConfig.examUrl}`);
   logger.info(`Final config - attentionWebhookUrl: ${appConfig.attentionWebhookUrl}`);
   logger.info(`Final config - SENTRY_DSN: ${appConfig.sentryDsn ? 'configured' : 'not set'}`);
+  logger.info(`Final config - EXAM_REPORT_SECRET_KEY: ${appConfig.examReportSecretKey ? 'configured' : 'not set'}`);
 }
 
 const DEFAULT_URL = 'https://simakkhaskempek.com';
@@ -83,7 +86,8 @@ export const appConfig = {
   attentionWebhookUrl: process.env.ATTENTION_WEBHOOK_URL ?? DEFAULT_WEBHOOK_URL,
   adminPin: process.env.ADMIN_PIN ?? '123456',
   adminShortcut: process.env.ADMIN_SHORTCUT ?? DEFAULT_SHORTCUT,
-  sentryDsn: process.env.SENTRY_DSN
+  sentryDsn: process.env.SENTRY_DSN,
+  examReportSecretKey: process.env.EXAM_REPORT_SECRET_KEY
 };
 
 export const isDev = process.env.NODE_ENV === 'development';

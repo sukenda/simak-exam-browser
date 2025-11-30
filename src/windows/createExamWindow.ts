@@ -7,6 +7,8 @@ import { logger } from '../logger';
 import { appConfig, isDev } from '../config';
 import { waitForExamServer } from '../utils/serverHealth';
 import { isQuitting } from '../state';
+import { cheatingTracker } from '../services/cheatingTracker';
+import { getStudentInfoFromStorage } from '../utils/studentInfo';
 
 type ExamWindowOptions = {
   splash?: BrowserWindow | null;
@@ -95,6 +97,18 @@ export async function createExamWindow(options?: ExamWindowOptions) {
       
       if (state === 'completed') {
         logger.info('[DOWNLOAD] Download completed', logData);
+        // Track download event
+        cheatingTracker.trackEvent(
+          'download',
+          'File downloaded',
+          'medium',
+          {
+            fileName: fileName,
+            fileSize: totalBytes,
+            downloadTime: new Date().toISOString(),
+            state: 'completed'
+          }
+        );
       } else if (state === 'cancelled') {
         logger.info('[DOWNLOAD] Download cancelled', logData);
       } else if (state === 'interrupted') {
@@ -127,6 +141,77 @@ export async function createExamWindow(options?: ExamWindowOptions) {
     options?.splash?.destroy();
   });
 
+  // ============================================
+  // TRACK PENGERJAAN IDs FROM URL
+  // ============================================
+  // Function untuk extract pengerjaanId dari URL
+  function extractPengerjaanIdFromUrl(url: string): string | null {
+    try {
+      const urlObj = new URL(url);
+      const pathSegments = urlObj.pathname.split('/').filter(Boolean);
+      
+      // Look for pattern: .../pengerjaan-soal/{id}
+      const pengerjaanIndex = pathSegments.findIndex(seg => 
+        seg.toLowerCase().includes('pengerjaan') || 
+        seg.toLowerCase().includes('soal')
+      );
+      
+      if (pengerjaanIndex >= 0 && pathSegments[pengerjaanIndex + 1]) {
+        return pathSegments[pengerjaanIndex + 1];
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Track URL changes untuk pengerjaan IDs
+  // did-navigate: untuk full page navigation
+  window.webContents.on('did-navigate', (event, url) => {
+    const pengerjaanId = extractPengerjaanIdFromUrl(url);
+    if (pengerjaanId) {
+      cheatingTracker.trackPengerjaanId(pengerjaanId);
+      logger.debug(`[EXAM WINDOW] Full page navigated to pengerjaan: ${pengerjaanId}`);
+    }
+  });
+
+  // did-frame-navigate: untuk SPA navigation (Vue.js router changes)
+  window.webContents.on('did-frame-navigate', (event, url) => {
+    const pengerjaanId = extractPengerjaanIdFromUrl(url);
+    if (pengerjaanId) {
+      cheatingTracker.trackPengerjaanId(pengerjaanId);
+      logger.debug(`[EXAM WINDOW] SPA navigated to pengerjaan: ${pengerjaanId}`);
+    }
+  });
+
+  // Also track when page finishes loading (for SPA navigation)
+  window.webContents.on('did-finish-load', () => {
+    const currentUrl = window.webContents.getURL();
+    const pengerjaanId = extractPengerjaanIdFromUrl(currentUrl);
+    if (pengerjaanId) {
+      cheatingTracker.trackPengerjaanId(pengerjaanId);
+      logger.debug(`[EXAM WINDOW] Page loaded with pengerjaan: ${pengerjaanId}`);
+    }
+    
+    // Try to cache student info when page loads (non-blocking, with delay for Vue app to initialize)
+    // This will cache data immediately after login, not wait until report is sent
+    setTimeout(() => {
+      getStudentInfoFromStorage(window, true).then(info => {
+        if (info && info.id) {
+          logger.info('[EXAM WINDOW] Student info cached successfully on page load', {
+            studentId: info.id,
+            studentName: info.name
+          });
+        } else {
+          logger.debug('[EXAM WINDOW] Student info not available yet on page load (may need to wait for login)');
+        }
+      }).catch(err => {
+        logger.debug('[EXAM WINDOW] Failed to cache student info on page load', err);
+      });
+    }, 1000); // Wait 1 second for Vue app to initialize
+  });
+
   logger.info(`Attempting to connect to: ${appConfig.examUrl}`);
   const reachable = await waitForExamServer(appConfig.examUrl);
   if (!reachable) {
@@ -139,6 +224,74 @@ export async function createExamWindow(options?: ExamWindowOptions) {
   logger.info(`Successfully connected to ${appConfig.examUrl}, loading page...`);
   try {
     await window.loadURL(appConfig.examUrl);
+    // Track initial URL after load
+    const initialUrl = window.webContents.getURL();
+    const initialPengerjaanId = extractPengerjaanIdFromUrl(initialUrl);
+    if (initialPengerjaanId) {
+      cheatingTracker.trackPengerjaanId(initialPengerjaanId);
+      logger.debug(`[EXAM WINDOW] Initial page loaded with pengerjaan: ${initialPengerjaanId}`);
+    }
+    
+    // Try to cache student info after initial load (non-blocking)
+    // Wait a bit for Vue app to initialize localStorage
+    setTimeout(() => {
+      getStudentInfoFromStorage(window, true).catch(err => {
+        logger.debug('[EXAM WINDOW] Failed to cache student info on initial load', err);
+      });
+    }, 2000); // Wait 2 seconds for Vue app to initialize
+    
+    // Periodic check to validate cache and detect logout (every 30 seconds)
+    // This will automatically clear cache if student logs out (localStorage becomes empty)
+    const cacheValidationInterval = setInterval(() => {
+      if (window.isDestroyed()) {
+        clearInterval(cacheValidationInterval);
+        return;
+      }
+      
+      // Force check to validate cache (will clear cache if localStorage is empty)
+      getStudentInfoFromStorage(window, true).catch(err => {
+        logger.debug('[EXAM WINDOW] Failed to validate student info cache', err);
+      });
+    }, 30000); // Check every 30 seconds
+    
+    // Also check on page navigation (SPA navigation might trigger logout)
+    window.webContents.on('did-navigate', () => {
+      // Small delay to let Vue app update localStorage
+      setTimeout(() => {
+        getStudentInfoFromStorage(window, true).catch(err => {
+          logger.debug('[EXAM WINDOW] Failed to validate student info on navigation', err);
+        });
+      }, 1000);
+    });
+    
+    // Periodic check untuk URL changes (setiap 5 detik)
+    // Ini akan catch SPA navigation yang mungkin terlewat oleh event listeners
+    let lastTrackedUrl = window.webContents.getURL();
+    const urlCheckInterval = setInterval(() => {
+      if (window.isDestroyed()) {
+        clearInterval(urlCheckInterval);
+        return;
+      }
+      
+      try {
+        const currentUrl = window.webContents.getURL();
+        if (currentUrl && currentUrl !== lastTrackedUrl) {
+          const previousUrl = lastTrackedUrl;
+          lastTrackedUrl = currentUrl;
+          const pengerjaanId = extractPengerjaanIdFromUrl(currentUrl);
+          if (pengerjaanId) {
+            cheatingTracker.trackPengerjaanId(pengerjaanId);
+            logger.debug(`[EXAM WINDOW] URL changed (periodic check) to pengerjaan: ${pengerjaanId}`, {
+              previousUrl: previousUrl,
+              currentUrl: currentUrl,
+              pengerjaanId: pengerjaanId
+            });
+          }
+        }
+      } catch (error) {
+        logger.debug('[EXAM WINDOW] Error in periodic URL check', error);
+      }
+    }, 5000); // Check every 5 seconds
   } catch (error) {
     logger.error(`Failed to load exam URL ${appConfig.examUrl}`, error);
     const html = `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Segoe UI;background:#0f172a;color:#fff;text-align:center;"><div><h1>Gagal memuat konten ujian</h1><p>Periksa koneksi atau coba lagi dalam beberapa saat.</p></div></body></html>`;
@@ -176,6 +329,19 @@ export async function createExamWindow(options?: ExamWindowOptions) {
       windowState,
       timestamp: new Date().toISOString()
     });
+    
+    // Track window minimize event
+    cheatingTracker.trackEvent(
+      'window_minimize',
+      'Window minimized (possibly from gesture)',
+      'critical',
+      {
+        windowState: 'minimized',
+        possibleCause: 'trackpad_gesture',
+        childWindowsCount: windowState.childWindowsCount
+      }
+    );
+    
     event.preventDefault(); // Coba prevent, tapi mungkin tidak selalu efektif
     if (!window.isDestroyed()) {
       // Restore window segera
@@ -185,6 +351,19 @@ export async function createExamWindow(options?: ExamWindowOptions) {
         action: 'restore',
         timestamp: new Date().toISOString()
       });
+      
+      // Track window restore
+      cheatingTracker.trackEvent(
+        'window_restore',
+        'Window restored from minimize',
+        'high',
+        {
+          windowState: 'restored',
+          restoredImmediately: true,
+          restoreDelay: 100
+        }
+      );
+      
       // Focus diperlukan karena window baru di-restore, tapi gunakan delay untuk tidak mengganggu
       setTimeout(() => {
         if (!window.isDestroyed()) {
@@ -348,6 +527,19 @@ export async function createExamWindow(options?: ExamWindowOptions) {
       action: 'restore-fullscreen',
       timestamp: new Date().toISOString()
     });
+    
+    // Track fullscreen exit event
+    cheatingTracker.trackEvent(
+      'fullscreen_exit',
+      'Window exited fullscreen',
+      'critical',
+      {
+        windowState: 'exited-fullscreen',
+        restoredImmediately: true,
+        restoreDelay: 200
+      }
+    );
+    
     if (!window.isDestroyed()) {
       window.setFullScreen(true);
       // Hanya focus jika window belum focused (untuk tidak mengganggu input yang sedang aktif)

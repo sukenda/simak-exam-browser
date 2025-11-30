@@ -105,6 +105,7 @@ jobs:
           EXAM_APP_URL=${{ secrets.EXAM_APP_URL || 'https://simakkhaskempek.com/' }}
           ATTENTION_WEBHOOK_URL=${{ secrets.ATTENTION_WEBHOOK_URL || 'https://api.simakkhaskempek.com/' }}
           ADMIN_PIN=${{ secrets.ADMIN_PIN || 'simakkhaskempek' }}
+          EXAM_REPORT_SECRET_KEY=${{ secrets.EXAM_REPORT_SECRET_KEY || 'zqKcgREsIoeS0r9RTuXRpc2YliJih8K6' }}
           ADMIN_SHORTCUT=${{ secrets.ADMIN_SHORTCUT || 'Ctrl+Alt+Shift+A+H' }}
           AUTO_UPDATE_URL=${PAGES_URL}/
           SENTRY_DSN=${{ secrets.SENTRY_DSN || '' }}
@@ -234,6 +235,7 @@ jobs:
           EXAM_APP_URL=${{ secrets.EXAM_APP_URL || 'https://simakkhaskempek.com/' }}
           ATTENTION_WEBHOOK_URL=${{ secrets.ATTENTION_WEBHOOK_URL || 'https://api.simakkhaskempek.com/' }}
           ADMIN_PIN=${{ secrets.ADMIN_PIN || 'khashebat' }}
+          EXAM_REPORT_SECRET_KEY=${{ secrets.EXAM_REPORT_SECRET_KEY || 'zqKcgREsIoeS0r9RTuXRpc2YliJih8K6' }}
           ADMIN_SHORTCUT=${{ secrets.ADMIN_SHORTCUT || 'Ctrl+Alt+Shift+A' }}
           AUTO_UPDATE_URL=${PAGES_URL}/
           SENTRY_DSN=${{ secrets.SENTRY_DSN || '' }}

@@ -6,10 +6,11 @@ import {createAdminWindow} from './windows/createAdminWindow';
 import {unregisterShortcutLocks} from './locks/keyboard';
 import {captureAppEvents, logger, logInitialization} from './logger';
 import {appConfig, isDev, reloadConfig} from './config';
-import {setQuitting} from './state';
+import {setQuitting, isQuitting} from './state';
 import {join} from 'node:path';
 import {readFileSync} from 'node:fs';
 import {initSentry} from './utils/sentry';
+import {sendCheatingReport, retryPendingReports} from './services/cheatingReporter';
 
 let examWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
@@ -98,6 +99,11 @@ app.whenReady().then(async () => {
     examWindow = await createExamWindow({splash: splashWindow});
     if (examWindow) {
         startRendererMemoryMonitor(examWindow);
+        
+        // Retry pending reports from previous session (non-blocking)
+        retryPendingReports().catch(err => {
+            logger.error('[MAIN] Failed to retry pending reports', err);
+        });
     }
 
     // F12 sekarang diblokir, info overlay menggunakan CTRL+SHIFT+ALT+S
@@ -255,14 +261,44 @@ app.whenReady().then(async () => {
     }
 });
 
-app.on('before-quit', () => {
-    setQuitting(true);
-    unregisterShortcutLocks();
-    if (periodicUpdateTimer) {
-        clearInterval(periodicUpdateTimer);
-        periodicUpdateTimer = null;
+app.on('before-quit', async (event) => {
+    // Prevent quit sementara untuk mengirim report jika ada exam window
+    if (examWindow && !examWindow.isDestroyed() && !isQuitting()) {
+        event.preventDefault(); // Prevent immediate quit
+        
+        logger.info('[MAIN] Application closing, attempting to send cheating report...');
+        try {
+            const success = await sendCheatingReport(examWindow);
+            if (success) {
+                logger.info('[MAIN] Cheating report sent successfully before quit');
+            } else {
+                logger.warn('[MAIN] Failed to send cheating report, but report should be saved to local file');
+            }
+        } catch (error) {
+            logger.error('[MAIN] Error sending cheating report before quit', error);
+        }
+        
+        // Set quitting flag and proceed with cleanup
+        setQuitting(true);
+        unregisterShortcutLocks();
+        if (periodicUpdateTimer) {
+            clearInterval(periodicUpdateTimer);
+            periodicUpdateTimer = null;
+        }
+        stopRendererMemoryMonitor();
+        
+        // Now allow quit
+        app.quit();
+    } else {
+        // Normal cleanup if no exam window or already quitting
+        setQuitting(true);
+        unregisterShortcutLocks();
+        if (periodicUpdateTimer) {
+            clearInterval(periodicUpdateTimer);
+            periodicUpdateTimer = null;
+        }
+        stopRendererMemoryMonitor();
     }
-    stopRendererMemoryMonitor();
 });
 
 app.on('window-all-closed', () => {
@@ -274,11 +310,35 @@ app.on('window-all-closed', () => {
 function setupIpcHandlers() {
     ipcMain.handle('admin:request-exit', async (_event, pin: string) => {
         if (pin === appConfig.adminPin) {
-            logger.info('Admin PIN valid, menutup aplikasi');
+            logger.info('Admin PIN valid, preparing to close application');
+            
+            // Send cheating report before closing
+            if (examWindow && !examWindow.isDestroyed()) {
+                logger.info('Sending cheating report before application exit...');
+                try {
+                    const success = await sendCheatingReport(examWindow);
+                    if (success) {
+                        logger.info('Cheating report sent successfully');
+                    } else {
+                        logger.warn('Failed to send cheating report, but continuing with exit');
+                    }
+                } catch (error) {
+                    logger.error('Error sending cheating report', error);
+                    // Continue with exit even if report fails
+                }
+            } else {
+                logger.info('No exam window available, skipping cheating report');
+            }
+            
             closeAdminWindow();
             setQuitting(true);
             unregisterShortcutLocks();
-            app.quit();
+            
+            // Give a small delay to ensure report is sent
+            setTimeout(() => {
+                app.quit();
+            }, 500);
+            
             return {success: true};
         }
         logger.warn('PIN admin salah');
