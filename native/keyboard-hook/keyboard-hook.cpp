@@ -33,6 +33,15 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             return 1;
         }
         
+        // Block Ctrl+Alt+Delete (Secure Attention Sequence)
+        // Note: Windows may override this due to security, but we try to block it
+        // VK_DELETE = 0x2E, VK_CONTROL = 0x11, VK_MENU = 0x12 (Alt)
+        if (pKeyboard->vkCode == VK_DELETE && 
+            (GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
+            (GetAsyncKeyState(VK_MENU) & 0x8000)) {
+            return 1; // Try to block, but Windows kernel may override
+        }
+        
         // Block Alt+F4
         if (pKeyboard->vkCode == VK_F4 && (GetAsyncKeyState(VK_MENU) & 0x8000)) {
             return 1;

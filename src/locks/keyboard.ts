@@ -157,7 +157,10 @@ export function registerShortcutLocks(window: BrowserWindow) {
     // Other
     { accelerator: 'PrintScreen', requiresOsPolicy: true },
     { accelerator: 'CommandOrControl+Alt+Escape', requiresOsPolicy: true },
-    { accelerator: 'CommandOrControl+Shift+R' }
+    { accelerator: 'CommandOrControl+Shift+R' },
+    // Security: Block Ctrl+Alt+Delete (Secure Attention Sequence)
+    // Note: On Linux, this may be handled by window manager before reaching Electron
+    { accelerator: 'CommandOrControl+Alt+Delete', requiresOsPolicy: true }
   ];
 
   shortcuts.forEach(({ accelerator, requiresOsPolicy }) => {
@@ -188,6 +191,21 @@ export function registerShortcutLocks(window: BrowserWindow) {
   window.webContents.on('before-input-event', (event, input) => {
     const combo = formatCombo(input);
     const key = input.key || input.code || '';
+    
+    // ============================================
+    // PRIORITY: BLOCK CTRL+ALT+DELETE (SECURE ATTENTION SEQUENCE)
+    // ============================================
+    // Block Ctrl+Alt+Delete - must be checked FIRST with highest priority
+    // This is critical for security, especially on Linux where it triggers logout dialog
+    if (input.control && input.alt && (key === 'Delete' || input.code === 'Delete' || input.code === 'NumpadDecimal')) {
+      logger.warn(`[SECURITY] Blocked Ctrl+Alt+Delete (Secure Attention Sequence)`);
+      event.preventDefault();
+      notifyShortcutViolation(window, { 
+        combo: 'Ctrl+Alt+Delete', 
+        source: 'before-input' 
+      });
+      return; // Early return - don't process further
+    }
     
     // ============================================
     // ALLOW BACKSPACE (NEEDED FOR TEXT EDITING)
