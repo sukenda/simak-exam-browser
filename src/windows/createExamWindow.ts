@@ -39,6 +39,81 @@ export async function createExamWindow(options?: ExamWindowOptions) {
   registerShortcutLocks(window);
   attachFocusMonitor(window);
   
+  // ============================================
+  // HANDLE DOWNLOAD EVENT - Prevent taskbar from showing
+  // ============================================
+  // Handler untuk intercept download dan memastikan taskbar tetap tersembunyi
+  window.webContents.session.on('will-download', (event, item, webContents) => {
+    const fileName = item.getFilename();
+    const totalBytes = item.getTotalBytes();
+    
+    logger.info('[DOWNLOAD] Download started', {
+      fileName,
+      totalBytes,
+      savePath: item.getSavePath(),
+      timestamp: new Date().toISOString()
+    });
+    
+    // Pastikan taskbar tetap tersembunyi saat download dimulai
+    if (window && !window.isDestroyed()) {
+      window.setSkipTaskbar(true);
+      window.setFullScreen(true);
+      logger.debug('[DOWNLOAD] Taskbar hidden and fullscreen maintained at download start');
+    }
+    
+    // Monitor download progress
+    item.on('updated', (event, state) => {
+      if (state === 'progressing') {
+        const received = item.getReceivedBytes();
+        if (totalBytes > 0) {
+          const percent = Math.round((received / totalBytes) * 100);
+          logger.debug(`[DOWNLOAD] Progress: ${percent}% (${received}/${totalBytes} bytes)`, {
+            fileName,
+            percent,
+            received,
+            totalBytes,
+            timestamp: new Date().toISOString()
+          });
+        }
+        
+        // Pastikan taskbar tetap tersembunyi selama download
+        if (window && !window.isDestroyed()) {
+          window.setSkipTaskbar(true);
+          window.setFullScreen(true);
+        }
+      }
+    });
+    
+    // Handle download completion
+    item.on('done', (event, state) => {
+      const logData = {
+        fileName,
+        state,
+        savePath: item.getSavePath(),
+        timestamp: new Date().toISOString()
+      };
+      
+      if (state === 'completed') {
+        logger.info('[DOWNLOAD] Download completed', logData);
+      } else if (state === 'cancelled') {
+        logger.info('[DOWNLOAD] Download cancelled', logData);
+      } else if (state === 'interrupted') {
+        logger.warn('[DOWNLOAD] Download interrupted', logData);
+      }
+      
+      // Pastikan taskbar tetap tersembunyi setelah download selesai
+      if (window && !window.isDestroyed()) {
+        window.setSkipTaskbar(true);
+        window.setFullScreen(true);
+        window.focus();
+        logger.debug('[DOWNLOAD] Taskbar hidden and fullscreen maintained after download', {
+          state,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+  });
+  
   // Handler untuk F12 - akan ditambahkan di main process setelah window dibuat
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => {
@@ -201,6 +276,21 @@ export async function createExamWindow(options?: ExamWindowOptions) {
           timestamp: new Date().toISOString()
         });
       }
+    }
+  });
+
+  // Handler untuk memastikan taskbar tetap tersembunyi saat window mendapat fokus
+  // (termasuk setelah download selesai atau event lainnya)
+  window.on('focus', () => {
+    if (!window.isDestroyed()) {
+      window.setSkipTaskbar(true);
+      window.setFullScreen(true);
+      logger.debug('[WINDOW FOCUS] Taskbar hidden and fullscreen maintained on focus', {
+        event: 'focus',
+        isFullScreen: window.isFullScreen(),
+        isFocused: window.isFocused(),
+        timestamp: new Date().toISOString()
+      });
     }
   });
 
