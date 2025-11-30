@@ -20,6 +20,7 @@ export async function createExamWindow(options?: ExamWindowOptions) {
     autoHideMenuBar: true,
     resizable: false,
     frame: false,
+    alwaysOnTop: true, // Prevent window from being minimized by trackpad gestures
     title: 'simak-exam-browser',
     icon: join(app.getAppPath(), 'dist', 'static', 'icons', 'win', 'simak-icon-circle.ico'),
     webPreferences: {
@@ -77,6 +78,201 @@ export async function createExamWindow(options?: ExamWindowOptions) {
     if (!isQuitting()) {
       event.preventDefault();
       window.hide();
+    }
+  });
+
+  // ============================================
+  // PREVENT TRACKPAD GESTURES - Restore window if minimized
+  // ============================================
+  // Handler untuk mencegah window minimize (termasuk dari gesture trackpad 3 jari)
+  // NOTE: Focus diperlukan di sini karena window baru di-restore dari minimize
+  window.on('minimize', (event: Electron.Event) => {
+    const windowState = {
+      isMinimized: window.isMinimized(),
+      isMaximized: window.isMaximized(),
+      isFullScreen: window.isFullScreen(),
+      isFocused: window.isFocused(),
+      isVisible: window.isVisible(),
+      isDestroyed: window.isDestroyed(),
+      childWindowsCount: window.getChildWindows().length
+    };
+    logger.warn('[GESTURE DETECTION] Window minimize detected (possibly from trackpad gesture)', {
+      event: 'minimize',
+      windowState,
+      timestamp: new Date().toISOString()
+    });
+    event.preventDefault(); // Coba prevent, tapi mungkin tidak selalu efektif
+    if (!window.isDestroyed()) {
+      // Restore window segera
+      window.restore();
+      window.setFullScreen(true);
+      logger.info('[GESTURE DETECTION] Window restored from minimize', {
+        action: 'restore',
+        timestamp: new Date().toISOString()
+      });
+      // Focus diperlukan karena window baru di-restore, tapi gunakan delay untuk tidak mengganggu
+      setTimeout(() => {
+        if (!window.isDestroyed()) {
+          window.focus();
+          window.setFullScreen(true);
+          window.setSkipTaskbar(true);
+          window.setAlwaysOnTop(true);
+          logger.info('[GESTURE DETECTION] Window state restored after minimize', {
+            action: 'restore-state',
+            isFullScreen: window.isFullScreen(),
+            isFocused: window.isFocused(),
+            isAlwaysOnTop: window.isAlwaysOnTop(),
+            timestamp: new Date().toISOString()
+          });
+        }
+      }, 100);
+    }
+  });
+
+  // Handler untuk memastikan window tetap fullscreen saat kehilangan focus
+  // (bisa terjadi karena gesture trackpad yang trigger show desktop)
+  // NOTE: Jangan restore focus jika ada modal window (admin window) yang sedang terbuka
+  window.on('blur', () => {
+    if (!window.isDestroyed()) {
+      const windowState = {
+        isMinimized: window.isMinimized(),
+        isMaximized: window.isMaximized(),
+        isFullScreen: window.isFullScreen(),
+        isFocused: window.isFocused(),
+        isVisible: window.isVisible(),
+        childWindowsCount: window.getChildWindows().length,
+        childWindows: window.getChildWindows().map(child => ({
+          isDestroyed: child.isDestroyed(),
+          isVisible: child.isVisible(),
+          title: child.getTitle()
+        }))
+      };
+      
+      // Restore fullscreen jika window tidak dalam fullscreen
+      // Tapi jangan restore focus karena mungkin ada modal window yang sedang terbuka
+      if (!window.isFullScreen()) {
+        logger.warn('[GESTURE DETECTION] Window lost fullscreen (possibly from gesture show desktop)', {
+          event: 'blur',
+          windowState,
+          action: 'restore-fullscreen',
+          timestamp: new Date().toISOString()
+        });
+        window.setFullScreen(true);
+        // Hanya restore focus jika window benar-benar tidak focused DAN tidak ada child window
+        // Cek apakah ada child window dengan memeriksa child windows
+        setTimeout(() => {
+          if (!window.isDestroyed() && !window.isFocused()) {
+            // Cek apakah ada child window yang sedang visible
+            const childWindows = window.getChildWindows();
+            const hasVisibleChild = childWindows.some(child => !child.isDestroyed() && child.isVisible());
+            
+            logger.info('[GESTURE DETECTION] Checking if focus should be restored after blur', {
+              event: 'blur-check',
+              hasVisibleChild,
+              childWindowsCount: childWindows.length,
+              isFocused: window.isFocused(),
+              timestamp: new Date().toISOString()
+            });
+            
+            // Hanya restore focus jika tidak ada child window yang visible
+            // Ini mencegah mengambil focus dari admin window
+            if (!hasVisibleChild) {
+              window.focus();
+              window.setFullScreen(true);
+              window.setSkipTaskbar(true);
+              window.setAlwaysOnTop(true);
+              logger.info('[GESTURE DETECTION] Focus restored after blur (no child windows)', {
+                action: 'restore-focus',
+                timestamp: new Date().toISOString()
+              });
+            } else {
+              logger.info('[GESTURE DETECTION] Focus NOT restored (child window is visible)', {
+                action: 'skip-restore-focus',
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+        }, 100);
+      } else {
+        // Log blur event even if fullscreen is still active (for debugging)
+        logger.debug('[GESTURE DETECTION] Window blur event (fullscreen still active)', {
+          event: 'blur',
+          windowState,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  });
+
+  // Handler untuk memastikan window selalu fullscreen saat ditampilkan
+  // NOTE: Jangan focus jika ada input field yang sedang aktif (untuk tidak mengganggu input di aplikasi Vue)
+  window.on('show', () => {
+    if (!window.isDestroyed()) {
+      const windowStateBefore = {
+        isMinimized: window.isMinimized(),
+        isMaximized: window.isMaximized(),
+        isFullScreen: window.isFullScreen(),
+        isFocused: window.isFocused(),
+        isVisible: window.isVisible()
+      };
+      
+      if (!window.isFullScreen()) {
+        logger.warn('[GESTURE DETECTION] Window show event - not in fullscreen, restoring...', {
+          event: 'show',
+          windowStateBefore,
+          action: 'restore-fullscreen',
+          timestamp: new Date().toISOString()
+        });
+        window.setFullScreen(true);
+      }
+      // Hanya focus jika window belum focused (untuk tidak mengganggu input yang sedang aktif)
+      const wasFocused = window.isFocused();
+      if (!wasFocused) {
+        window.focus();
+        logger.info('[GESTURE DETECTION] Window focused on show event', {
+          event: 'show',
+          action: 'focus',
+          wasFocused,
+          timestamp: new Date().toISOString()
+        });
+      }
+      window.setSkipTaskbar(true);
+      window.setAlwaysOnTop(true);
+    }
+  });
+
+  // Handler untuk mencegah window keluar dari fullscreen
+  // NOTE: Jangan focus jika ada input field yang sedang aktif (untuk tidak mengganggu input di aplikasi Vue)
+  window.on('leave-full-screen', () => {
+    const windowState = {
+      isMinimized: window.isMinimized(),
+      isMaximized: window.isMaximized(),
+      isFullScreen: window.isFullScreen(),
+      isFocused: window.isFocused(),
+      isVisible: window.isVisible(),
+      childWindowsCount: window.getChildWindows().length
+    };
+    logger.warn('[GESTURE DETECTION] Window left fullscreen (possibly from gesture)', {
+      event: 'leave-full-screen',
+      windowState,
+      action: 'restore-fullscreen',
+      timestamp: new Date().toISOString()
+    });
+    if (!window.isDestroyed()) {
+      window.setFullScreen(true);
+      // Hanya focus jika window belum focused (untuk tidak mengganggu input yang sedang aktif)
+      // Gunakan setTimeout untuk memastikan tidak mengganggu input yang sedang diketik
+      setTimeout(() => {
+        if (!window.isDestroyed() && !window.isFocused()) {
+          window.focus();
+          logger.info('[GESTURE DETECTION] Focus restored after leave-full-screen', {
+            action: 'restore-focus',
+            isFocused: window.isFocused(),
+            timestamp: new Date().toISOString()
+          });
+        }
+      }, 200);
+      window.setAlwaysOnTop(true);
     }
   });
 
